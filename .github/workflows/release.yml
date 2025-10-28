@@ -6,47 +6,18 @@ on:
       - 'v*'
 
 jobs:
-  create-release:
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create-release.outputs.result }}
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Create release
-        id: create-release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const { data } = await github.rest.repos.createRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: `${context.ref.replace('refs/tags/', '')}`,
-              name: `HomeMap ${context.ref.replace('refs/tags/', '')}`,
-              body: 'See the assets below to download the app.',
-              draft: true,
-              prerelease: false
-            })
-            return data.id
-
   release:
     permissions:
       contents: write
-    needs: create-release
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: 'macos-latest'
-            target: 'aarch64-apple-darwin'
             args: '--target aarch64-apple-darwin'
           - platform: 'macos-latest'
-            target: 'x86_64-apple-darwin'
             args: '--target x86_64-apple-darwin'
           - platform: 'windows-latest'
-            target: 'x86_64-pc-windows-msvc'
             args: ''
     
     runs-on: ${{ matrix.platform }}
@@ -63,7 +34,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       
       - name: Install frontend dependencies
         run: npm install --package-lock=false || echo "{}" > package.json && npm install --package-lock=false
@@ -75,23 +46,32 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
+          tagName: ${{ github.ref_name }}
+          releaseName: 'HomeMap ${{ github.ref_name }}'
+          releaseBody: |
+            ## HomeMap Release ${{ github.ref_name }}
+            
+            Download the appropriate installer for your platform below.
+            
+            ### Installation
+            
+            **macOS:**
+            - Apple Silicon (M1/M2/M3): Download `HomeMap_*_aarch64.dmg`
+            - Intel: Download `HomeMap_*_x64.dmg`
+            - Open the DMG and drag HomeMap to Applications
+            
+            **Windows:**
+            - Download `HomeMap_*_x64-setup.exe`
+            - Run the installer
+            
+            ### Auto-Updates
+            
+            Once installed, the app will automatically check for updates. You can also manually check via:
+            - Menu → HomeMap → Check for Updates...
+            
+            ---
+            
+            See [CHANGELOG.md](https://github.com/jangabrielsson/HomeMap/blob/main/CHANGELOG.md) for details.
+          releaseDraft: false
+          prerelease: false
           args: ${{ matrix.args }}
-
-  publish-release:
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    needs: [create-release, release]
-    
-    steps:
-      - name: Publish release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: ${{ needs.create-release.outputs.release_id }},
-              draft: false
-            })
