@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HomeMap</title>
     <link rel="stylesheet" href="styles.css">
+    <script>
+        // Suppress Tauri hot-reload errors in dev mode
+        window.addEventListener('unhandledrejection', (event) => {
+            const error = event.reason;
+            if (error && error.message && error.message.includes('callbackId')) {
+                // This is a known Tauri dev mode hot-reload issue, suppress it
+                event.preventDefault();
+                console.debug('Suppressed Tauri hot-reload error');
+            }
+        });
+    </script>
 </head>
 <body>
     <div class="container">

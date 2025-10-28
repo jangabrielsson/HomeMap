@@ -192,3 +192,137 @@ main {
     white-space: nowrap;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
+
+/* Custom Tooltip */
+.device {
+    position: relative;
+}
+
+.device[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, 0.9);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    border-radius: 6px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1001;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.device[data-tooltip]:hover::after {
+    opacity: 1;
+}
+
+/* Slider Modal */
+.slider-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.slider-content {
+    background: #2c3e50;
+    padding: 24px;
+    border-radius: 12px;
+    min-width: 320px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.slider-content h3 {
+    margin: 0 0 20px 0;
+    color: #ecf0f1;
+    font-size: 18px;
+}
+
+.slider-container {
+    margin: 20px 0;
+}
+
+.slider-container input[type="range"] {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: #34495e;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.slider-container input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+}
+
+.slider-container input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+    border: none;
+}
+
+.slider-value {
+    text-align: center;
+    font-size: 32px;
+    font-weight: bold;
+    color: #3498db;
+    margin: 10px 0;
+}
+
+.slider-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.slider-buttons button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.slider-buttons .btn-cancel {
+    background: #7f8c8d;
+    color: white;
+}
+
+.slider-buttons .btn-cancel:hover {
+    background: #95a5a6;
+}
+
+.slider-buttons .btn-set {
+    background: #3498db;
+    color: white;
+}
+
+.slider-buttons .btn-set:hover {
+    background: #2980b9;
+}
+

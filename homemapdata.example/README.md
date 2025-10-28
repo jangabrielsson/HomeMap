@@ -70,6 +70,11 @@ homemapdata/
 
 See `config.json` for the structure. Key points:
 
+- **name**: The application title (defaults to "HomeMap" if not specified)
+- **icon**: Optional path to custom app icon (e.g., "icons/house.png")
+  - If not specified, the default house emoji 🏠 is used
+  - Icon is displayed in the header bar
+  - Path is relative to the homemapdata directory
 - **floors**: Define each floor with an image and dimensions
 - **devices**: Place devices on floors with x,y coordinates
 - Device coordinates are in the natural image dimensions (not screen pixels)

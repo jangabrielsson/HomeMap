@@ -3,7 +3,7 @@
 🏠 Visual Floor Plan Interface for Fibaro Home Center 3
 
 [![Release](https://img.shields.io/github/v/release/jangabrielsson/HomeMap)](https://github.com/jangabrielsson/HomeMap/releases)
-[![License](https://img.shields.io/github/license/jangabrielsson/HomeMap)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## Overview
 
@@ -33,32 +33,58 @@ Download the latest release for your platform from the [Releases](https://github
   - Intel: `HomeMap_*_x64.dmg`
 - **Windows**: `HomeMap_*_x64-setup.exe`
 
+### First Run
+
+**macOS:**
+1. Open the DMG and drag HomeMap to Applications
+2. Right-click the app and select "Open" (first time only)
+3. If blocked, go to System Preferences → Security & Privacy → "Open Anyway"
+
+**Windows:**
+1. Run the installer
+2. If Windows Defender blocks it, click "More info" → "Run anyway"
+3. App is safe but not signed with a Microsoft certificate
+
 ### Quick Setup
 
-1. **Install the app** from the DMG or installer
-
-2. **Create configuration folder**
+1. **Create configuration folder**
    - Menu → HomeMap → Create Configuration...
    - Select a location (e.g., Documents or Desktop)
    - A `homemapdata` folder will be created with templates
 
 3. **Set up HC3 credentials**
 
-   Create a `.env` file in your home directory (`~/.env`):
+   Create a `.env` file in your home directory:
+   - **macOS**: `~/.env`
+   - **Windows**: `C:\Users\YourUsername\.env`
 
    ```bash
    HC3_HOST=192.168.1.57
    HC3_USER=admin
    HC3_PASSWORD=your-password
    HC3_PROTOCOL=http
+   HC3_HOMEMAP=/path/to/homemapdata
    ```
+
+   **Note:** If your password contains special characters like `$`, `"`, `'`, or spaces, do NOT quote it - just write it as-is.
 
 4. **Customize your setup**
    - Add floor plan images to `homemapdata/images/`
    - Edit `homemapdata/config.json` with your devices
    - Add device icons to `homemapdata/icons/`
 
-See [homemapdata.example/README.md](homemapdata.example/README.md) for detailed setup instructions.
+See [CONFIGURE.md](CONFIGURE.md) for complete configuration guide.
+
+## Updates
+
+HomeMap includes automatic update support:
+
+- **Check for Updates**: Menu → HomeMap → Check for Updates
+- **Automatic Notifications**: App notifies you when new versions are available
+- **One-Click Install**: Download and install updates with a single click
+- **Secure Updates**: All updates are cryptographically signed
+
+Updates are downloaded from the [GitHub Releases](https://github.com/jangabrielsson/HomeMap/releases) page and verified before installation.
 
 ## Widget System
 
@@ -124,8 +150,8 @@ cargo tauri build
 
 Comprehensive guides are available in the [`docs/`](docs/) directory:
 
+- **[CONFIGURE.md](CONFIGURE.md)** - Complete configuration guide (widgets, icons, actions, floor plans)
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
-- **[VERSION.md](VERSION.md)** - Version information
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development setup guide
 - **[docs/DEV_GUIDE.md](docs/DEV_GUIDE.md)** - Development patterns and best practices
 - **[docs/UPDATER_SETUP.md](docs/UPDATER_SETUP.md)** - Auto-updater configuration
@@ -157,4 +183,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 
 ## Related Projects
 
-- [QuickAppManager](https://github.com/jangabrielsson/QuickAppManager) - HC3 QuickApp development tool
+- [EventLogger](https://github.com/jangabrielsson/EventLogger) - HC3 event monitoring tool
+- [plua](https://github.com/jangabrielsson/plua) - Lua programming environment for HC3

@@ -19,7 +19,15 @@ class HomeMap {
         this.draggedDevice = null;
         this.dragOffset = { x: 0, y: 0 };
         this.setupEditMode();
+        this.setupCleanup();
         this.init();
+    }
+
+    setupCleanup() {
+        // Stop polling when page unloads
+        window.addEventListener('beforeunload', () => {
+            this.stopEventPolling();
+        });
     }
 
     setupEditMode() {
@@ -71,6 +79,9 @@ class HomeMap {
             this.homemapConfig = await this.invoke('get_homemap_config');
             console.log('HomeMap config:', this.homemapConfig);
             
+            // Update window title and header
+            await this.updateAppTitle();
+            
             // Load widget definitions
             await this.loadWidgets();
             
@@ -81,6 +92,34 @@ class HomeMap {
         } catch (error) {
             console.error('Failed to load HomeMap config:', error);
             this.floorContainerEl.innerHTML = `<p style="color: #f44336;">Error: ${error}</p>`;
+        }
+    }
+
+    async updateAppTitle() {
+        const appName = this.homemapConfig.name || 'HomeMap';
+        const iconPath = this.homemapConfig.icon;
+        
+        // Update window title
+        document.title = appName;
+        
+        // Update header
+        const header = document.querySelector('header h1');
+        if (header) {
+            if (iconPath) {
+                // Load custom icon from homemapdata
+                try {
+                    const base64Icon = await this.invoke('read_image_as_base64', { 
+                        imagePath: iconPath 
+                    });
+                    header.innerHTML = `<img src="data:image/png;base64,${base64Icon}" alt="${appName}" style="width: 32px; height: 32px; vertical-align: middle; margin-right: 8px;"> ${appName}`;
+                } catch (error) {
+                    console.warn('Failed to load custom icon, using default:', error);
+                    header.textContent = `🏠 ${appName}`;
+                }
+            } else {
+                // Use default house emoji
+                header.textContent = `🏠 ${appName}`;
+            }
         }
     }
 
@@ -212,6 +251,7 @@ class HomeMap {
             deviceEl.className = 'device';
             deviceEl.id = `device-${device.id}`;
             deviceEl.style.position = 'absolute';
+            deviceEl.setAttribute('data-tooltip', `${device.name} (ID: ${device.id})`);
             
             // Calculate position as percentage of image dimensions
             const xPercent = (device.position.x / img.naturalWidth) * 100;
@@ -226,7 +266,6 @@ class HomeMap {
             icon.style.width = '32px';
             icon.style.height = '32px';
             icon.alt = device.name;
-            icon.title = device.name;
             
             // Create text element for value display
             const textEl = document.createElement('div');
@@ -245,6 +284,9 @@ class HomeMap {
             
             // Add drag functionality
             this.setupDeviceDrag(deviceEl, device, container, img);
+            
+            // Add click action handling
+            this.setupDeviceClick(deviceEl, device);
             
             // Load initial icon based on widget definition
             this.updateDeviceIcon(device, icon, textEl);
@@ -320,6 +362,186 @@ class HomeMap {
                 await this.saveConfig();
             }
         });
+    }
+
+    setupDeviceClick(deviceEl, device) {
+        deviceEl.addEventListener('click', async (e) => {
+            // Don't trigger action in edit mode (for dragging)
+            if (this.editMode) return;
+            
+            // Get widget definition
+            const widget = this.widgets[device.type];
+            if (!widget || !widget.actions || !widget.actions.click) {
+                return; // No click action defined for this widget
+            }
+            
+            const action = widget.actions.click;
+            
+            // Handle slider type actions
+            if (action.type === 'slider') {
+                this.showSlider(device, action);
+                return;
+            }
+            
+            // Handle direct API call actions
+            try {
+                await this.executeAction(device, action);
+                
+                // Visual feedback
+                deviceEl.style.opacity = '0.5';
+                setTimeout(() => {
+                    deviceEl.style.opacity = '1';
+                }, 200);
+                
+            } catch (error) {
+                console.error(`Failed to execute action for device ${device.id}:`, error);
+                alert(`Failed to execute action: ${error.message}`);
+            }
+        });
+    }
+
+    async showSlider(device, action) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'slider-modal';
+        
+        // Get current device value from HC3
+        let currentValue = 50; // Default
+        try {
+            const url = `${this.config.protocol}://${this.config.host}/api/devices/${device.id}`;
+            const response = await this.http.fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(`${this.config.user}:${this.config.password}`)
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                // Use valueProperty from action definition (e.g., "properties.value")
+                const propertyPath = action.valueProperty || 'properties.value';
+                currentValue = this.getPropertyValue(data, propertyPath) || 50;
+            }
+        } catch (error) {
+            console.warn('Could not fetch current device value:', error);
+        }
+        
+        modal.innerHTML = `
+            <div class="slider-content">
+                <h3>${device.name}</h3>
+                <div class="slider-value">${currentValue}%</div>
+                <div class="slider-container">
+                    <input type="range" min="${action.min}" max="${action.max}" value="${currentValue}" id="dimmerSlider">
+                </div>
+                <div class="slider-buttons">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-set">Set</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const slider = modal.querySelector('#dimmerSlider');
+        const valueDisplay = modal.querySelector('.slider-value');
+        const cancelBtn = modal.querySelector('.btn-cancel');
+        const setBtn = modal.querySelector('.btn-set');
+        
+        // Update value display as slider moves
+        slider.addEventListener('input', (e) => {
+            valueDisplay.textContent = `${e.target.value}%`;
+        });
+        
+        // Cancel button
+        cancelBtn.addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Set button
+        setBtn.addEventListener('click', async () => {
+            const value = parseInt(slider.value);
+            try {
+                await this.executeAction(device, action, value);
+                document.body.removeChild(modal);
+            } catch (error) {
+                console.error(`Failed to set value for device ${device.id}:`, error);
+                alert(`Failed to set value: ${error.message}`);
+            }
+        });
+        
+        // Click outside to cancel
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+
+    async executeAction(device, action, value = null) {
+        // Build API URL by replacing ${id} with device.id
+        const apiUrl = action.api.replace('${id}', device.id);
+        const fullUrl = `${this.config.protocol}://${this.config.host}${apiUrl}`;
+        
+        console.log(`Executing action: ${action.method} ${fullUrl}`);
+        
+        // Prepare request body if needed
+        let requestBody = null;
+        if (action.body && value !== null) {
+            // Deep clone the body and replace ${value} with actual value
+            const bodyStr = JSON.stringify(action.body);
+            // Replace "${value}" with actual number (no quotes)
+            const replacedStr = bodyStr.replace(/"?\$\{value\}"?/g, value);
+            requestBody = JSON.parse(replacedStr);
+            console.log('Request body object:', requestBody);
+        }
+        
+        // Make the API call using Tauri HTTP plugin
+        const fetchOptions = {
+            method: action.method || 'GET',
+            headers: {
+                'Authorization': 'Basic ' + btoa(`${this.config.user}:${this.config.password}`),
+                'X-Fibaro-Version': '2',
+                'Accept-Language': 'en'
+            }
+        };
+        
+        if (requestBody) {
+            const bodyJson = JSON.stringify(requestBody);
+            console.log('Sending body:', bodyJson);
+            fetchOptions.headers['Content-Type'] = 'application/json';
+            fetchOptions.body = bodyJson;
+        }
+        
+        const response = await this.http.fetch(fullUrl, fetchOptions);
+        
+        console.log(`Action response - Status: ${response.status}, OK: ${response.ok}`);
+        console.log('Response headers:', response.headers);
+        console.log('Response data:', response.data);
+        
+        if (!response.ok) {
+            // Try to get error details
+            let errorDetail = response.statusText || 'Bad Request';
+            
+            // Try to read response text if available
+            try {
+                const responseText = await response.text();
+                console.error('Response text:', responseText);
+                if (responseText) {
+                    errorDetail += ` - ${responseText}`;
+                }
+            } catch (e) {
+                console.warn('Could not read response text');
+            }
+            
+            if (response.data) {
+                errorDetail += ` - Data: ${JSON.stringify(response.data)}`;
+            }
+            
+            console.error('Full error response:', response);
+            throw new Error(`HTTP ${response.status}: ${errorDetail}`);
+        }
+        
+        console.log(`Action executed successfully for device ${device.id}`);
     }
 
     async saveConfig() {
@@ -605,7 +827,22 @@ class HomeMap {
                     }
                 }
             } catch (error) {
-                console.error('Event polling error:', error);
+                // Check if we should still be polling
+                if (!this.isPolling) {
+                    console.log('Polling stopped, exiting poll loop');
+                    break;
+                }
+                
+                // Handle specific error types
+                const errorMsg = error.message || error.toString();
+                
+                // If it's a resource ID error, it's likely due to page reload - just log and continue
+                if (errorMsg.includes('resource id') || errorMsg.includes('invalid')) {
+                    console.warn('HTTP resource error (likely due to reload), continuing...', errorMsg);
+                } else {
+                    console.error('Event polling error:', errorMsg);
+                }
+                
                 // Wait before retrying on timeout or error
                 await new Promise(resolve => setTimeout(resolve, 5000));
             }

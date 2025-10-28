@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeMap - Floor Plan Visualization for HC3</title>
+</head>
+<body>
+    <button id="copyBtn" onclick="copyToClipboard()" style="position: fixed; top: 10px; right: 10px; padding: 10px 20px; font-size: 16px; cursor: pointer; background: #4CAF50; color: white; border: none; border-radius: 4px;">
+        Copy Forum Post
+    </button>
+    
+    <div id="content">
+<h1>🏠 HomeMap</h1>
+<p class="subtitle">Visual Floor Plan Interface for Fibaro Home Center 3</p>
+
+<p>
+<span class="badge badge-blue">Release</span>
+<span class="badge badge-green">MIT License</span>
+</p>
+
+<h2>Overview</h2>
+<p>HomeMap is a desktop application for visualizing and controlling your Fibaro Home Center 3 (HC3) home automation system using interactive floor plans.</p>
+
+<hr>
+
+<h2>✨ Features</h2>
+<ul>
+<li><strong>📍 Interactive Floor Plans</strong> - Display devices on custom floor plan images</li>
+<li><strong>🔄 Real-time Updates</strong> - Live device status using HC3 event polling</li>
+<li><strong>🎨 Flexible Widget System</strong> - JSON-based device definitions with valuemaps</li>
+<li><strong>✏️ Edit Mode</strong> - Drag-and-drop device repositioning with auto-save</li>
+<li><strong>🏷️ Multiple Device Types</strong> - Lights, dimmers, temperature sensors, motion sensors</li>
+<li><strong>⚡ Fast Event Handling</strong> - Dispatch table architecture for O(1) event processing</li>
+<li><strong>🔧 DevTools</strong> - Built-in developer tools (Cmd+Shift+I)</li>
+<li><strong>🔄 Auto-Updates</strong> - Automatic update checking and installation</li>
+<li><strong>🎯 Multi-Floor Support</strong> - Tab-based navigation between floors</li>
+<li><strong>📁 Easy Setup</strong> - Built-in configuration wizard</li>
+</ul>
+
+<hr>
+
+<h2>📥 Installation</h2>
+
+<h3>Download</h3>
+<p>Download the latest release for your platform from the <a href="https://github.com/jangabrielsson/HomeMap/releases">Releases</a> page:</p>
+
+<p><strong>macOS</strong></p>
+<ul>
+<li>Apple Silicon (M1/M2/M3): <code>HomeMap_*_aarch64.dmg</code></li>
+<li>Intel: <code>HomeMap_*_x64.dmg</code></li>
+</ul>
+
+<p><strong>Windows:</strong> <code>HomeMap_*_x64-setup.exe</code></p>
+
+<h3>First Run</h3>
+
+<p><strong>macOS:</strong></p>
+<ol>
+<li>Open the DMG and drag HomeMap to Applications</li>
+<li>Right-click the app and select "Open" (first time only)</li>
+<li>If blocked, go to System Preferences → Security &amp; Privacy → "Open Anyway"</li>
+</ol>
+
+<p><strong>Windows:</strong></p>
+<ol>
+<li>Run the installer</li>
+<li>If Windows Defender blocks it, click "More info" → "Run anyway"</li>
+<li>App is safe but not signed with a Microsoft certificate</li>
+</ol>
+
+<h3>Quick Setup</h3>
+
+<p><strong>1. Create configuration folder</strong></p>
+<ul>
+<li>Menu → HomeMap → Create Configuration...</li>
+<li>Select a location (e.g., Documents or Desktop)</li>
+<li>A <code>homemapdata</code> folder will be created with templates</li>
+</ul>
+
+<p><strong>2. Set up HC3 credentials</strong></p>
+
+<p>Create a <code>.env</code> file in your home directory:</p>
+<ul>
+<li><strong>macOS:</strong> <code>~/.env</code></li>
+<li><strong>Windows:</strong> <code>C:\Users\YourUsername\.env</code></li>
+</ul>
+
+<p>Content:</p>
+<pre><code>HC3_HOST=192.168.1.57
+HC3_USER=admin
+HC3_PASSWORD=your-password
+HC3_PROTOCOL=http
+HC3_HOMEMAP=/path/to/homemapdata</code></pre>
+
+<p><em>Note: If your password contains special characters like $, ", ', or spaces, do NOT quote it - just write it as-is.</em></p>
+
+<p><strong>3. Customize your setup</strong></p>
+<ul>
+<li>Add floor plan images to <code>homemapdata/images/</code></li>
+<li>Edit <code>homemapdata/config.json</code> with your devices</li>
+<li>Add device icons to <code>homemapdata/icons/</code></li>
+</ul>
+
+<p>See <a href="https://github.com/jangabrielsson/HomeMap/blob/main/CONFIGURE.md">CONFIGURE.md</a> for complete configuration guide.</p>
+
+<hr>
+
+<h2>🔄 Updates</h2>
+
+<p>HomeMap includes automatic update support:</p>
+<ul>
+<li><strong>Check for Updates:</strong> Menu → HomeMap → Check for Updates</li>
+<li><strong>Automatic Notifications:</strong> App notifies you when new versions are available</li>
+<li><strong>One-Click Install:</strong> Download and install updates with a single click</li>
+<li><strong>Secure Updates:</strong> All updates are cryptographically signed</li>
+</ul>
+
+<p>Updates are downloaded from the <a href="https://github.com/jangabrielsson/HomeMap/releases">GitHub Releases</a> page and verified before installation.</p>
+
+<hr>
+
+<h2>🎨 Widget System</h2>
+
+<p>HomeMap uses a flexible JSON-based widget system. Each device type is defined by:</p>
+<ul>
+<li><strong>Valuemaps:</strong> Icon and display rendering definitions</li>
+<li><strong>Status API:</strong> Properties to fetch from HC3</li>
+<li><strong>Events:</strong> Event types to listen for</li>
+<li><strong>Actions:</strong> Click actions (toggle, slider, etc.)</li>
+</ul>
+
+<p>Supported device types:</p>
+<ul>
+<li><strong>light</strong> - Simple on/off lights</li>
+<li><strong>lightdim</strong> - Dimmable lights with slider control</li>
+<li><strong>binarySwitch</strong> - Binary switches with toggle</li>
+<li><strong>temperature</strong> - Temperature sensors</li>
+<li><strong>motion</strong> - Motion sensors with last breach time</li>
+</ul>
+
+<hr>
+
+<h2>🛠️ Development</h2>
+
+<p>Built with:</p>
+<ul>
+<li><strong>Tauri 2.x</strong> - Modern desktop framework</li>
+<li><strong>Rust</strong> - Backend for HC3 API integration</li>
+<li><strong>JavaScript</strong> - Frontend with vanilla JS</li>
+<li><strong>Event-driven</strong> - Long-polling with dispatch tables</li>
+</ul>
+
+<p>See <a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/DEVELOPMENT.md">DEVELOPMENT.md</a> for development setup.</p>
+
+<hr>
+
+<h2>📚 Documentation</h2>
+
+<p>Comprehensive guides are available:</p>
+<ul>
+<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/CONFIGURE.md">CONFIGURE.md</a></strong> - Complete configuration guide</li>
+<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/CHANGELOG.md">CHANGELOG.md</a></strong> - Version history and changes</li>
+<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/DEVELOPMENT.md">DEVELOPMENT.md</a></strong> - Development setup guide</li>
+<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/DEV_GUIDE.md">DEV_GUIDE.md</a></strong> - Development patterns</li>
+</ul>
+
+<hr>
+
+<h2>🏗️ Architecture</h2>
+
+<p>Built on Tauri 2.x with:</p>
+<ul>
+<li><strong>Backend:</strong> Rust for HC3 API integration and file operations</li>
+<li><strong>Frontend:</strong> Vanilla JavaScript with Tauri APIs</li>
+<li><strong>Event System:</strong> Long-polling with dispatch table (30s timeout, 1s throttle)</li>
+<li><strong>Configuration:</strong> JSON-based with auto-save on edits</li>
+<li><strong>Based on:</strong> QuickAppManager architecture and learnings</li>
+</ul>
+
+<hr>
+
+<h2>🤝 Contributing</h2>
+
+<p>Contributions are welcome! Please feel free to:</p>
+<ul>
+<li>Report bugs or request features via <a href="https://github.com/jangabrielsson/HomeMap/issues">Issues</a></li>
+<li>Submit pull requests</li>
+<li>Share your widget definitions</li>
+<li>Improve documentation</li>
+</ul>
+
+<hr>
+
+<h2>📄 License</h2>
+
+<p>MIT License - see <a href="https://github.com/jangabrielsson/HomeMap/blob/main/LICENSE">LICENSE</a> file for details.</p>
+
+<hr>
+
+<h2>🔗 Related Projects</h2>
+
+<ul>
+<li><strong><a href="https://github.com/jangabrielsson/EventLogger">EventLogger</a></strong> - HC3 event monitoring tool</li>
+<li><strong><a href="https://github.com/jangabrielsson/plua">Plua</a></strong> - Fibaro QuickApp development environment</li>
+</ul>
+
+<p><em>HomeMap - Visualize and control your smart home with interactive floor plans! 🏠✨</em></p>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            const content = document.getElementById('content');
+            const range = document.createRange();
+            range.selectNode(content);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            
+            try {
+                document.execCommand('copy');
+                const button = document.getElementById('copyBtn');
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = '#2196F3';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = '#4CAF50';
+                }, 2000);
+            } catch (err) {
+                alert('Copy failed. Please select and copy manually.');
+            }
+            
+            window.getSelection().removeAllRanges();
+        }
+    </script>
+</body>
+</html>
