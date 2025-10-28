@@ -1,0 +1,70 @@
+# Environment variables (contains HC3 credentials)
+.env
+.env.local
+.env.*.local
+
+# User-specific HomeMap data (personal floor plans, device configs)
+homemapdata/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node modules (if you add npm/yarn later)
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Rust/Cargo
+target/
+# Don't ignore Cargo.lock for applications - it ensures reproducible builds
+# Cargo.lock
+
+# Tauri
+src-tauri/target/
+src-tauri/WixTools/
+src-tauri/gen/
+
+# Build outputs
+*.exe
+*.app
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# Temporary files
+*.tmp
+*.temp
+
+UPDATER_FINAL_STEPS.md

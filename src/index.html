@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HomeMap</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏠 HomeMap</h1>
+            <div class="header-controls">
+                <label class="edit-toggle">
+                    <input type="checkbox" id="editMode">
+                    <span>Edit Mode</span>
+                </label>
+                <div class="status">
+                    <span class="status-dot"></span>
+                    <span id="connectionStatus">Connecting...</span>
+                </div>
+            </div>
+        </header>
+        
+        <div class="tabs" id="floorTabs"></div>
+        
+        <main>
+            <div class="floor-container" id="floorContainer">
+                <p>Loading floors...</p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "homemap",
+  "version": "0.1.0",
+  "description": "HC3 Home Automation Map Visualization",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

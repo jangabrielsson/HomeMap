@@ -1,0 +1,23 @@
+<svg width="1024" height="1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- Blue circle background -->
+  <circle cx="512" cy="512" r="512" fill="#2196F3"/>
+  
+  <!-- White house icon centered -->
+  <g transform="translate(512, 512)">
+    <!-- Roof -->
+    <path d="M -200 -50 L 0 -250 L 200 -50 L 150 -50 L 150 0 L -150 0 L -150 -50 Z" 
+          fill="white"/>
+    
+    <!-- House body -->
+    <rect x="-150" y="0" width="300" height="250" fill="white"/>
+    
+    <!-- Door -->
+    <rect x="-50" y="100" width="100" height="150" fill="#1976D2"/>
+    
+    <!-- Left window -->
+    <rect x="-130" y="40" width="60" height="60" fill="#1976D2"/>
+    
+    <!-- Right window -->
+    <rect x="70" y="40" width="60" height="60" fill="#1976D2"/>
+  </g>
+</svg>

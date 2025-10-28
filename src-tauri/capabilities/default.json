@@ -1,0 +1,43 @@
+{
+  "identifier": "default",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "http:default",
+    {
+      "identifier": "http:allow-fetch",
+      "allow": [
+        {
+          "url": "http://*/*"
+        },
+        {
+          "url": "https://*/*"
+        }
+      ]
+    },
+    "fs:default",
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$RESOURCE/**"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [
+        {
+          "path": "$HOME/**"
+        },
+        {
+          "path": "$RESOURCE/**"
+        }
+      ]
+    },
+    "fs:allow-exists"
+  ]
+}

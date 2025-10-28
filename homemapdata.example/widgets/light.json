@@ -1,0 +1,26 @@
+{
+    "valuemaps": {
+        "light": {
+            "icon": {
+                "property": "value",
+                "type": "boolean",
+                "true": "icons/LightBulbFull.svg",
+                "false": "icons/LightBulbOff.svg"
+            }
+        }
+    },
+    
+    "status": {
+        "api": "/api/devices/${id}",
+        "properties": ["properties.value"],
+        "valuemap": "light"
+    },
+
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "id": "id",
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "valuemap": "light"
+        }
+    }
+}
