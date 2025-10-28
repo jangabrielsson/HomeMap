@@ -1,0 +1,48 @@
+{
+    "valuemaps": {
+        "lightdim": {
+            "icon": {
+                "property": "value",
+                "type": "range",
+                "ranges": [
+                    { "min": 0, "max": 0, "path": "icons/LightBulbOff.svg" },
+                    { "min": 1, "max": 98, "path": "icons/LightBulbHalf.svg" },
+                    { "min": 99, "max": 100, "path": "icons/LightBulbFull.svg" }
+                ]
+            },
+            "display": {
+                "property": "value",
+                "type": "integer",
+                "text": "${value}%"
+            }
+        }
+    },
+    
+    "status": {
+        "api": "/api/devices/${id}",
+        "properties": ["properties.value"],
+        "valuemap": "lightdim"
+    },
+
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "id": "id",
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "valuemap": "lightdim"
+        }
+    },
+
+    "actions": {
+        "click": {
+            "type": "slider",
+            "min": 0,
+            "max": 99,
+            "valueProperty": "properties.value",
+            "method": "POST",
+            "api": "/api/devices/${id}/action/setValue",
+            "body": {
+                "args": ["${value}"]
+            }
+        }
+    }
+}

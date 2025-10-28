@@ -1,0 +1,32 @@
+{
+    "valuemaps": {
+        "doorSensor": {
+            "icon": {
+                "property": "value",
+                "type": "boolean",
+                "true": "icons/DoorSensorOpen.svg",
+                "false": "icons/DoorSensorClosed.svg"
+            },
+            "display": {
+                "property": "lastBreached",
+                "type": "epoch",
+                "text": "${timeAgo}",
+                "format": "timeAgo"
+            }
+        }
+    },
+    
+    "status": {
+        "api": "/api/devices/${id}",
+        "properties": ["properties.value", "properties.lastBreached"],
+        "valuemap": "doorSensor"
+    },
+
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "id": "id",
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "valuemap": "doorSensor"
+        }
+    }
+}

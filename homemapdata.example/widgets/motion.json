@@ -1,0 +1,32 @@
+{
+    "valuemaps": {
+        "motion": {
+            "icon": {
+                "property": "value",
+                "type": "boolean",
+                "true": "icons/MotionBreached.svg",
+                "false": "icons/MotionSafe.svg"
+            },
+            "display": {
+                "property": "lastBreached",
+                "type": "epoch",
+                "text": "${timeAgo}",
+                "format": "timeAgo"
+            }
+        }
+    },
+    
+    "status": {
+        "api": "/api/devices/${id}",
+        "properties": ["properties.value", "properties.lastBreached"],
+        "valuemap": "motion"
+    },
+
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "id": "id",
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "valuemap": "motion"
+        }
+    }
+}

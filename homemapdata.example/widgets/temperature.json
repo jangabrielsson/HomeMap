@@ -1,0 +1,30 @@
+{
+    "valuemaps": {
+        "temperature": {
+            "icon": {
+                "property": "value",
+                "type": "static",
+                "path": "icons/TemperatureMeter.svg"
+            },
+            "display": {
+                "property": "value",
+                "type": "float",
+                "text": "${value}°"
+            }
+        }
+    },
+    
+    "status": {
+        "api": "/api/devices/${id}",
+        "properties": ["properties.value"],
+        "valuemap": "temperature"
+    },
+
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "id": "id",
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "valuemap": "temperature"
+        }
+    }
+}

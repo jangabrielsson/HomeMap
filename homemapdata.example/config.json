@@ -10,6 +10,13 @@
             "image": "images/floor1.jpg",
             "width": 2000,
             "height": 1500
+        },
+        {
+            "id": "floor2",
+            "name": "Second Floor",
+            "image": "images/floor2.jpg",
+            "width": 2000,
+            "height": 1500
         }
     ],
 

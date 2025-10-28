@@ -1,0 +1,33 @@
+{
+    "valuemaps": {
+        "switch": {
+            "icon": {
+                "property": "value",
+                "type": "boolean",
+                "true": "icons/binarySwitchOn.png",
+                "false": "icons/binarySwitchOff.png"
+            }
+        }
+    },
+    
+    "status": {
+        "api": "/api/devices/${id}",
+        "properties": ["properties.value"],
+        "valuemap": "switch"
+    },
+
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "id": "id",
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "valuemap": "switch"
+        }
+    },
+
+    "actions": {
+        "click": {
+            "method": "GET",
+            "api": "/api/callAction?deviceID=${id}&name=toggle"
+        }
+    }
+}
