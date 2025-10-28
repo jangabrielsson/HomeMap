@@ -183,6 +183,89 @@ fn save_config(config_json: String) -> Result<(), String> {
     Ok(())
 }
 
+fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)
+            .map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    
+    let entries = fs::read_dir(src)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let src_path = entry.path();
+        let file_name = entry.file_name();
+        let dst_path = dst.join(&file_name);
+        
+        if src_path.is_dir() {
+            copy_dir_recursive(&src_path, &dst_path)?;
+        } else {
+            fs::copy(&src_path, &dst_path)
+                .map_err(|e| format!("Failed to copy file: {}", e))?;
+        }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+fn create_config_folder(app: tauri::AppHandle, destination_path: String) -> Result<String, String> {
+    let dest = PathBuf::from(&destination_path);
+    let homemapdata_dest = dest.join("homemapdata");
+    
+    // Check if homemapdata already exists
+    if homemapdata_dest.exists() {
+        return Err("A 'homemapdata' folder already exists at this location.".to_string());
+    }
+    
+    // Find the template (homemapdata.example)
+    // First try to resolve from bundled resources (production)
+    let template_path = if let Some(resource_path) = app.path().resource_dir().ok() {
+        let template = resource_path.join("homemapdata.example");
+        println!("Checking bundled resource: {:?}", template);
+        if template.exists() {
+            println!("Found template in bundled resources");
+            template
+        } else {
+            // Fallback to development mode - look in parent directories
+            println!("Template not in bundled resources, checking parent dirs");
+            if let Ok(exe_path) = env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    let mut current = exe_dir;
+                    let mut found = None;
+                    for _ in 0..5 {
+                        if let Some(parent) = current.parent() {
+                            let template = parent.join("homemapdata.example");
+                            if template.exists() {
+                                println!("Found template in parent: {:?}", template);
+                                found = Some(template);
+                                break;
+                            }
+                            current = parent;
+                        }
+                    }
+                    found.ok_or("Could not find homemapdata.example template")?
+                } else {
+                    return Err("Could not determine executable directory".to_string());
+                }
+            } else {
+                return Err("Could not determine executable path".to_string());
+            }
+        }
+    } else {
+        return Err("Could not access resource directory".to_string());
+    };
+    
+    println!("Copying template from: {:?}", template_path);
+    println!("Copying template to: {:?}", homemapdata_dest);
+    
+    // Copy the template
+    copy_dir_recursive(&template_path, &homemapdata_dest)?;
+    
+    Ok(homemapdata_dest.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -191,7 +274,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![get_hc3_config, get_homemap_config, get_data_path, read_image_as_base64, read_widget_json, save_config])
+        .invoke_handler(tauri::generate_handler![get_hc3_config, get_homemap_config, get_data_path, read_image_as_base64, read_widget_json, save_config, create_config_folder])
         .setup(|app| {
             // Create menu items
             let toggle_devtools = MenuItemBuilder::with_id("toggle_devtools", "Toggle DevTools")
@@ -201,10 +284,14 @@ pub fn run() {
             let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
                 .build(app)?;
             
+            let create_config = MenuItemBuilder::with_id("create-config", "Create Configuration...")
+                .build(app)?;
+            
             // Create app menu (first menu on macOS)
             let app_menu = SubmenuBuilder::new(app, "HomeMap")
                 .item(&PredefinedMenuItem::about(app, None, None)?)
                 .item(&check_updates)
+                .item(&create_config)
                 .separator()
                 .item(&PredefinedMenuItem::services(app, None)?)
                 .separator()
@@ -246,6 +333,11 @@ pub fn run() {
                     println!("Check for updates event received");
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.emit("check-for-updates", ());
+                    }
+                } else if event.id() == "create-config" {
+                    println!("Create configuration event received");
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("create-config", ());
                     }
                 }
             });

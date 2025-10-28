@@ -16,6 +16,12 @@ async function setupUpdater() {
         console.log('Check for updates triggered from menu');
         checkForUpdates(false);
     });
+    
+    // Listen for menu "Create Configuration" event
+    await window.__TAURI__.event.listen('create-config', () => {
+        console.log('Create configuration triggered from menu');
+        createConfiguration();
+    });
 }
 
 async function checkForUpdates(silent = false) {
@@ -92,6 +98,61 @@ async function checkForUpdates(silent = false) {
             const { message } = window.__TAURI__.dialog;
             await message(`Failed to check for updates: ${error.message}`, 
                          { title: 'Update Error', kind: 'error' });
+        }
+    }
+}
+
+async function createConfiguration() {
+    if (!window.__TAURI__?.dialog) {
+        console.error('Dialog plugin not available');
+        return;
+    }
+    
+    try {
+        const { open, message } = window.__TAURI__.dialog;
+        
+        // Ask user to select a folder
+        const selected = await open({
+            directory: true,
+            multiple: false,
+            title: 'Select location to create homemapdata folder'
+        });
+        
+        if (!selected) {
+            console.log('User cancelled folder selection');
+            return;
+        }
+        
+        console.log('Selected folder:', selected);
+        
+        // Call Rust command to create the configuration
+        const result = await window.__TAURI__.core.invoke('create_config_folder', {
+            destinationPath: selected
+        });
+        
+        console.log('Configuration created at:', result);
+        
+        // Show success message
+        await message(
+            `Configuration folder created successfully at:\n\n${result}\n\nPlease add your floor plan images to the images folder and edit config.json to add your devices.`,
+            {
+                title: 'Configuration Created',
+                kind: 'info'
+            }
+        );
+        
+    } catch (error) {
+        console.error('Failed to create configuration:', error);
+        
+        if (window.__TAURI__?.dialog) {
+            const { message } = window.__TAURI__.dialog;
+            await message(
+                `Failed to create configuration:\n\n${error}`,
+                {
+                    title: 'Error',
+                    kind: 'error'
+                }
+            );
         }
     }
 }
