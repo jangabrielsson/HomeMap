@@ -3,6 +3,8 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
+    "core:window:allow-create",
+    "core:webview:allow-internal-toggle-devtools",
     "http:default",
     {
       "identifier": "http:allow-fetch",
@@ -38,6 +40,13 @@
         }
       ]
     },
-    "fs:allow-exists"
+    "fs:allow-exists",
+    "dialog:default",
+    "process:default",
+    "updater:default",
+    "updater:allow-check",
+    "updater:allow-download",
+    "updater:allow-download-and-install",
+    "updater:allow-install"
   ]
 }
