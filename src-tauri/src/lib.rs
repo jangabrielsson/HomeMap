@@ -1,7 +1,7 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -188,6 +188,9 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .invoke_handler(tauri::generate_handler![get_hc3_config, get_homemap_config, get_data_path, read_image_as_base64, read_widget_json, save_config])
         .setup(|app| {
             // Create menu items
@@ -195,9 +198,13 @@ pub fn run() {
                 .accelerator("CmdOrCtrl+Shift+I")
                 .build(app)?;
             
+            let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
+                .build(app)?;
+            
             // Create app menu (first menu on macOS)
             let app_menu = SubmenuBuilder::new(app, "HomeMap")
                 .item(&PredefinedMenuItem::about(app, None, None)?)
+                .item(&check_updates)
                 .separator()
                 .item(&PredefinedMenuItem::services(app, None)?)
                 .separator()
@@ -234,6 +241,11 @@ pub fn run() {
                         }
                     } else {
                         println!("Could not find window 'main'");
+                    }
+                } else if event.id() == "check-for-updates" {
+                    println!("Check for updates event received");
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("check-for-updates", ());
                     }
                 }
             });
