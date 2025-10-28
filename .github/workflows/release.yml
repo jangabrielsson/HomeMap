@@ -75,6 +75,6 @@ jobs:
             ---
             
             See [CHANGELOG.md](https://github.com/jangabrielsson/HomeMap/blob/main/CHANGELOG.md) for details.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
