@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            target: 'aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest'
+            target: 'x86_64-apple-darwin'
+            args: '--target x86_64-apple-darwin'
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+            args: ''
+    
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      
+      - name: Install frontend dependencies
+        run: npm install --package-lock=false || echo "{}" > package.json && npm install --package-lock=false
+      
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'HomeMap ${{ github.ref_name }}'
+          releaseBody: |
+            ## HomeMap Release ${{ github.ref_name }}
+            
+            Download the appropriate installer for your platform below.
+            
+            ### Installation
+            
+            **macOS:**
+            - Apple Silicon (M1/M2/M3): Download `HomeMap_*_aarch64.dmg`
+            - Intel: Download `HomeMap_*_x64.dmg`
+            - Open the DMG and drag HomeMap to Applications
+            
+            **Windows:**
+            - Download `HomeMap_*_x64-setup.exe`
+            - Run the installer
+            
+            ### Auto-Updates
+            
+            Once installed, the app will automatically check for updates. You can also manually check via:
+            - Menu → HomeMap → Check for Updates...
+            
+            ---
+            
+            See [CHANGELOG.md](https://github.com/jangabrielsson/HomeMap/blob/main/CHANGELOG.md) for details.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
