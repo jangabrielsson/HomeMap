@@ -1,6 +1,6 @@
 [package]
 name = "homemap"
-version = "0.1.2"
+version = "0.1.3"
 description = "HC3 Home Automation Map Visualization"
 authors = ["Jan Gabrielsson"]
 edition = "2021"
