@@ -67,4 +67,6 @@ src-tauri/gen/
 *.tmp
 *.temp
 
+# Auto-update keys (contains private signing key)
+AUTOUPDATE_KEYS.md
 UPDATER_FINAL_STEPS.md

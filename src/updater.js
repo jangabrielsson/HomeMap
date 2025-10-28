@@ -1,0 +1,102 @@
+// Auto-updater functionality for HomeMap
+// Based on Tauri 2.x updater plugin with dialog and process plugins
+
+async function setupUpdater() {
+    const { check } = window.__TAURI__?.updater || {};
+    
+    if (!check) {
+        console.log('Updater not available (dev mode or missing plugin)');
+        return;
+    }
+    
+    console.log('Updater initialized');
+    
+    // Listen for menu "Check for Updates" event
+    await window.__TAURI__.event.listen('check-for-updates', () => {
+        console.log('Check for updates triggered from menu');
+        checkForUpdates(false);
+    });
+}
+
+async function checkForUpdates(silent = false) {
+    try {
+        console.log('Checking for updates...');
+        const { check } = window.__TAURI__.updater;
+        const update = await check();
+        
+        if (update?.available) {
+            const version = update.version;
+            let body = update.body || 'Bug fixes and improvements';
+            
+            // Clean up release notes (remove manual installation instructions)
+            body = body.replace(/## Installation[\s\S]*$/i, '').trim();
+            body = body.replace(/### Manual Installation[\s\S]*$/i, '').trim();
+            
+            const message = `A new version (${version}) is available!\n\n${body}\n\nThe update will be downloaded and installed automatically.`;
+            
+            // Try dialog API with fallback for ACL errors
+            let shouldUpdate = true;
+            if (window.__TAURI__?.dialog) {
+                try {
+                    const { ask } = window.__TAURI__.dialog;
+                    shouldUpdate = await ask(message, {
+                        title: 'Update Available',
+                        kind: 'info',
+                        okLabel: 'Update',
+                        cancelLabel: 'Later'
+                    });
+                } catch (error) {
+                    console.log('Dialog failed, auto-installing:', error.message);
+                }
+            }
+            
+            if (shouldUpdate) {
+                console.log('Downloading and installing update...');
+                await update.downloadAndInstall();
+                
+                // Try to restart
+                if (window.__TAURI__?.process?.relaunch) {
+                    try {
+                        const { ask } = window.__TAURI__.dialog;
+                        const shouldRelaunch = await ask(
+                            'Update installed successfully. Restart now?',
+                            { 
+                                title: 'Update Complete', 
+                                kind: 'info', 
+                                okLabel: 'Restart Now', 
+                                cancelLabel: 'Later' 
+                            }
+                        );
+                        if (shouldRelaunch) {
+                            await window.__TAURI__.process.relaunch();
+                        }
+                    } catch (error) {
+                        console.log('Auto-restarting...', error.message);
+                        await window.__TAURI__.process.relaunch();
+                    }
+                } else {
+                    console.log('Update installed. Please restart the application manually.');
+                }
+            }
+        } else if (!silent) {
+            console.log('No updates available');
+            if (window.__TAURI__?.dialog) {
+                const { message } = window.__TAURI__.dialog;
+                await message('You are running the latest version!', 
+                             { title: 'No Updates', kind: 'info' });
+            }
+        }
+    } catch (error) {
+        console.error('Update check failed:', error);
+        if (!silent && window.__TAURI__?.dialog) {
+            const { message } = window.__TAURI__.dialog;
+            await message(`Failed to check for updates: ${error.message}`, 
+                         { title: 'Update Error', kind: 'error' });
+        }
+    }
+}
+
+// Initialize on app start
+if (window.__TAURI__) {
+    setupUpdater();
+}
