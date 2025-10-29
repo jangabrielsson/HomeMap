@@ -19,8 +19,121 @@ class HomeMap {
         this.draggedDevice = null;
         this.dragOffset = { x: 0, y: 0 };
         this.setupEditMode();
+        this.setupSettings();
         this.setupCleanup();
         this.init();
+    }
+
+    // Helper functions for multi-floor device support
+    
+    /**
+     * Check if a device is on a specific floor
+     * Supports both old (floor_id) and new (floors array) formats
+     */
+    isDeviceOnFloor(device, floorId) {
+        if (device.floors) {
+            // New multi-floor format
+            return device.floors.some(f => f.floor_id === floorId);
+        } else {
+            // Old single-floor format
+            return device.floor_id === floorId;
+        }
+    }
+
+    /**
+     * Get device position for a specific floor
+     * Returns null if device is not on that floor
+     */
+    getDevicePosition(device, floorId) {
+        if (device.floors) {
+            // New multi-floor format
+            const floorEntry = device.floors.find(f => f.floor_id === floorId);
+            return floorEntry?.position || null;
+        } else {
+            // Old single-floor format
+            return device.floor_id === floorId ? device.position : null;
+        }
+    }
+
+    /**
+     * Get all floor IDs that a device is on
+     */
+    getDeviceFloors(device) {
+        if (device.floors) {
+            // New multi-floor format
+            return device.floors.map(f => f.floor_id);
+        } else {
+            // Old single-floor format
+            return device.floor_id ? [device.floor_id] : [];
+        }
+    }
+
+    /**
+     * Update device position on a specific floor
+     * Creates floors array if needed
+     */
+    updateDevicePosition(device, floorId, position) {
+        if (device.floors) {
+            // New multi-floor format
+            const floorEntry = device.floors.find(f => f.floor_id === floorId);
+            if (floorEntry) {
+                floorEntry.position = position;
+            }
+        } else {
+            // Old single-floor format
+            if (device.floor_id === floorId) {
+                device.position = position;
+            }
+        }
+    }
+
+    /**
+     * Add device to a floor (for multi-floor support)
+     */
+    addDeviceToFloor(device, floorId, position = { x: 500, y: 300 }) {
+        if (device.floors) {
+            // Already multi-floor format
+            if (!device.floors.some(f => f.floor_id === floorId)) {
+                device.floors.push({ floor_id: floorId, position });
+            }
+        } else if (device.floor_id) {
+            // Convert from single-floor to multi-floor
+            const existingFloorId = device.floor_id;
+            const existingPosition = device.position;
+            
+            device.floors = [
+                { floor_id: existingFloorId, position: existingPosition },
+                { floor_id: floorId, position }
+            ];
+            
+            // Remove old format properties
+            delete device.floor_id;
+            delete device.position;
+        }
+    }
+
+    /**
+     * Remove device from a floor
+     */
+    removeDeviceFromFloor(device, floorId) {
+        if (device.floors) {
+            device.floors = device.floors.filter(f => f.floor_id !== floorId);
+            
+            // If only one floor left, optionally convert back to simple format
+            if (device.floors.length === 1) {
+                const lastFloor = device.floors[0];
+                device.floor_id = lastFloor.floor_id;
+                device.position = lastFloor.position;
+                delete device.floors;
+            } else if (device.floors.length === 0) {
+                // Remove device entirely if no floors left
+                return false; // Indicate device should be removed
+            }
+        } else if (device.floor_id === floorId) {
+            // Can't remove from single floor - would delete device
+            return false;
+        }
+        return true;
     }
 
     setupCleanup() {
@@ -37,6 +150,95 @@ class HomeMap {
                 this.editMode = e.target.checked;
                 this.toggleEditMode();
             });
+        }
+    }
+
+    setupSettings() {
+        const settingsBtn = document.getElementById('settingsBtn');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const closeSettings = document.getElementById('closeSettings');
+        const cancelSettings = document.getElementById('cancelSettings');
+        const saveSettings = document.getElementById('saveSettings');
+        const browseHomemapPath = document.getElementById('browseHomemapPath');
+
+        // Open settings
+        settingsBtn.addEventListener('click', async () => {
+            await this.openSettings();
+        });
+
+        // Close settings
+        closeSettings.addEventListener('click', () => {
+            this.closeSettings();
+        });
+
+        cancelSettings.addEventListener('click', () => {
+            this.closeSettings();
+        });
+
+        // Save settings
+        saveSettings.addEventListener('click', async () => {
+            await this.saveSettings();
+        });
+
+        // Browse for homemapdata folder
+        browseHomemapPath.addEventListener('click', async () => {
+            await this.browseHomemapPath();
+        });
+    }
+
+    async openSettings() {
+        try {
+            // Get current settings from backend
+            const settings = await this.invoke('get_app_settings');
+            
+            // Populate form
+            document.getElementById('hc3Host').value = settings.hc3_host || '';
+            document.getElementById('hc3User').value = settings.hc3_user || '';
+            document.getElementById('hc3Password').value = settings.hc3_password || '';
+            document.getElementById('hc3Protocol').value = settings.hc3_protocol || 'http';
+            document.getElementById('homemapPath').value = settings.homemap_path || '';
+            
+            // Show panel
+            document.getElementById('settingsPanel').classList.add('open');
+        } catch (error) {
+            console.error('Failed to load settings:', error);
+            alert('Failed to load settings: ' + error);
+        }
+    }
+
+    closeSettings() {
+        document.getElementById('settingsPanel').classList.remove('open');
+    }
+
+    async saveSettings() {
+        try {
+            const settings = {
+                hc3_host: document.getElementById('hc3Host').value,
+                hc3_user: document.getElementById('hc3User').value,
+                hc3_password: document.getElementById('hc3Password').value,
+                hc3_protocol: document.getElementById('hc3Protocol').value,
+                homemap_path: document.getElementById('homemapPath').value
+            };
+
+            await this.invoke('save_app_settings', { settings });
+            
+            this.closeSettings();
+            alert('Settings saved! Please restart the app for changes to take effect.');
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            alert('Failed to save settings: ' + error);
+        }
+    }
+
+    async browseHomemapPath() {
+        try {
+            const path = await this.invoke('select_homemap_folder');
+            if (path) {
+                document.getElementById('homemapPath').value = path;
+            }
+        } catch (error) {
+            console.error('Failed to browse folder:', error);
+            alert('Failed to browse folder: ' + error);
         }
     }
 
@@ -244,9 +446,17 @@ class HomeMap {
     }
 
     renderDevicesOnFloor(floorId, container, img) {
-        const devices = this.homemapConfig.devices?.filter(d => d.floor_id === floorId) || [];
+        // Filter devices that are on this floor (supports both formats)
+        const devices = this.homemapConfig.devices?.filter(d => this.isDeviceOnFloor(d, floorId)) || [];
         
         devices.forEach(device => {
+            // Get position for this specific floor
+            const position = this.getDevicePosition(device, floorId);
+            if (!position) {
+                console.warn(`Device ${device.id} has no position for floor ${floorId}`);
+                return;
+            }
+            
             const deviceEl = document.createElement('div');
             deviceEl.className = 'device';
             deviceEl.id = `device-${device.id}`;
@@ -254,8 +464,8 @@ class HomeMap {
             deviceEl.setAttribute('data-tooltip', `${device.name} (ID: ${device.id})`);
             
             // Calculate position as percentage of image dimensions
-            const xPercent = (device.position.x / img.naturalWidth) * 100;
-            const yPercent = (device.position.y / img.naturalHeight) * 100;
+            const xPercent = (position.x / img.naturalWidth) * 100;
+            const yPercent = (position.y / img.naturalHeight) * 100;
             deviceEl.style.left = `${xPercent}%`;
             deviceEl.style.top = `${yPercent}%`;
             deviceEl.style.transform = 'translate(-50%, -50%)';
@@ -287,6 +497,9 @@ class HomeMap {
             
             // Add click action handling
             this.setupDeviceClick(deviceEl, device);
+            
+            // Add context menu (right-click)
+            this.setupDeviceContextMenu(deviceEl, device);
             
             // Load initial icon based on widget definition
             this.updateDeviceIcon(device, icon, textEl);
@@ -352,16 +565,144 @@ class HomeMap {
                 const naturalX = (x / imgRect.width) * img.naturalWidth;
                 const naturalY = (y / imgRect.height) * img.naturalHeight;
                 
-                // Update device position
-                device.position.x = Math.round(naturalX);
-                device.position.y = Math.round(naturalY);
+                // Update device position on current floor
+                const newPosition = { x: Math.round(naturalX), y: Math.round(naturalY) };
+                this.updateDevicePosition(device, this.currentFloorId, newPosition);
                 
-                console.log(`Device ${device.id} moved to (${device.position.x}, ${device.position.y})`);
+                console.log(`Device ${device.id} moved to (${newPosition.x}, ${newPosition.y}) on floor ${this.currentFloorId}`);
                 
                 // Save config
                 await this.saveConfig();
             }
         });
+    }
+
+    setupDeviceContextMenu(deviceEl, device) {
+        deviceEl.addEventListener('contextmenu', (e) => {
+            console.log('Context menu triggered, editMode:', this.editMode);
+            if (!this.editMode) {
+                console.log('Not in edit mode, ignoring right-click');
+                return; // Only show context menu in edit mode
+            }
+            
+            e.preventDefault();
+            console.log('Showing context menu at', e.clientX, e.clientY);
+            this.showContextMenu(e.clientX, e.clientY, device);
+        });
+    }
+
+    showContextMenu(x, y, device) {
+        const contextMenu = document.getElementById('contextMenu');
+        const floorsContainer = document.getElementById('contextMenuFloors');
+        
+        // Clear previous items
+        floorsContainer.innerHTML = '';
+        
+        // Get all floors this device is on
+        const deviceFloors = this.getDeviceFloors(device);
+        
+        // Add menu item for each floor
+        this.homemapConfig.floors.forEach(floor => {
+            const item = document.createElement('div');
+            item.className = 'context-menu-item';
+            
+            // Check if device is on this floor
+            const isOnThisFloor = deviceFloors.includes(floor.id);
+            if (isOnThisFloor) {
+                item.classList.add('current-floor');
+            }
+            
+            item.textContent = floor.name;
+            
+            item.addEventListener('click', async () => {
+                if (isOnThisFloor && deviceFloors.length > 1) {
+                    // Remove from this floor if on multiple floors
+                    this.removeDeviceFromFloor(device, floor.id);
+                    await this.saveConfig();
+                    this.renderFloors();
+                } else if (!isOnThisFloor) {
+                    // Add to this floor (copy position from current floor or any existing floor)
+                    let position = this.getDevicePosition(device, this.currentFloorId);
+                    
+                    // If device not on current floor, get position from any floor it's on
+                    if (!position && deviceFloors.length > 0) {
+                        position = this.getDevicePosition(device, deviceFloors[0]);
+                    }
+                    
+                    // Fall back to default center position if no position found
+                    if (!position) {
+                        position = { x: 500, y: 300 };
+                    }
+                    
+                    this.addDeviceToFloor(device, floor.id, position);
+                    await this.saveConfig();
+                    this.renderFloors();
+                    this.showFloor(floor.id);
+                }
+                // If it's the only floor, do nothing (can't remove)
+                this.hideContextMenu();
+            });
+            
+            floorsContainer.appendChild(item);
+        });
+        
+        // Position the menu
+        contextMenu.style.left = `${x}px`;
+        contextMenu.style.top = `${y}px`;
+        contextMenu.style.display = 'block';
+        
+        // Hide menu when clicking elsewhere
+        const hideOnClick = (e) => {
+            if (!contextMenu.contains(e.target)) {
+                this.hideContextMenu();
+                document.removeEventListener('click', hideOnClick);
+            }
+        };
+        
+        // Delay to avoid immediate close
+        setTimeout(() => {
+            document.addEventListener('click', hideOnClick);
+        }, 10);
+    }
+
+    hideContextMenu() {
+        const contextMenu = document.getElementById('contextMenu');
+        contextMenu.style.display = 'none';
+    }
+
+    async moveDeviceToFloor(device, targetFloor) {
+        try {
+            // Find the device in the config's devices array
+            const configDevice = this.homemapConfig.devices.find(d => d.id === device.id);
+            
+            if (!configDevice) {
+                console.error('Device not found in config:', device.id);
+                return;
+            }
+            
+            const oldFloorId = configDevice.floor_id;
+            
+            // Update the device's floor_id
+            configDevice.floor_id = targetFloor.id;
+            
+            // Reset position to center of new floor
+            configDevice.position = { x: 500, y: 300 };
+            
+            console.log(`Moved device ${device.id} from ${oldFloorId} to ${targetFloor.id}`);
+            
+            // Save config
+            await this.saveConfig();
+            
+            // Re-render all floors to update the UI
+            this.renderFloors();
+            
+            // Show the target floor to see the moved device
+            this.showFloor(targetFloor.id);
+            
+        } catch (error) {
+            console.error('Failed to move device:', error);
+            alert('Failed to move device: ' + error.message);
+        }
     }
 
     setupDeviceClick(deviceEl, device) {

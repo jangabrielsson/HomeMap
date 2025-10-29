@@ -326,3 +326,241 @@ main {
     background: #2980b9;
 }
 
+/* Settings Panel */
+.settings-panel {
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 400px;
+    height: 100vh;
+    background: #2c2c2c;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.5);
+    transition: right 0.3s ease;
+    z-index: 2000;
+    overflow-y: auto;
+}
+
+.settings-panel.open {
+    right: 0;
+}
+
+.settings-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 2px solid #333;
+    background: #252525;
+}
+
+.settings-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.settings-body {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.settings-body h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 20px 0 15px 0;
+    color: #3498db;
+}
+
+.settings-body h3:first-child {
+    margin-top: 0;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #b0b0b0;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: #1e1e1e;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.form-group input::placeholder {
+    color: #666;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #888;
+}
+
+.path-input {
+    display: flex;
+    gap: 10px;
+}
+
+.path-input input {
+    flex: 1;
+}
+
+.settings-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #333;
+}
+
+.icon-button {
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    padding: 5px 10px;
+    border-radius: 6px;
+    transition: background 0.2s;
+}
+
+.icon-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.close-button {
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.close-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #e0e0e0;
+}
+
+.primary-button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    background: #3498db;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.primary-button:hover {
+    background: #2980b9;
+}
+
+.secondary-button {
+    padding: 12px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: transparent;
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.secondary-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #666;
+}
+
+.path-input .secondary-button {
+    flex-shrink: 0;
+    padding: 10px 16px;
+}
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    background: #2c2c2c;
+    border: 1px solid #444;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    z-index: 3000;
+    min-width: 200px;
+    overflow: hidden;
+}
+
+.context-menu-header {
+    padding: 10px 15px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    background: #252525;
+    border-bottom: 1px solid #333;
+}
+
+.context-menu-items {
+    padding: 5px 0;
+}
+
+.context-menu-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #e0e0e0;
+    transition: background 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.context-menu-item:hover {
+    background: rgba(52, 152, 219, 0.2);
+}
+
+.context-menu-item.current-floor {
+    color: #3498db;
+    font-weight: 600;
+}
+
+.context-menu-item.current-floor::before {
+    content: "✓";
+    color: #3498db;
+}

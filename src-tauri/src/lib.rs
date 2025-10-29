@@ -271,6 +271,92 @@ fn create_config_folder(app: tauri::AppHandle, destination_path: String) -> Resu
     Ok(homemapdata_dest.to_string_lossy().to_string())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct AppSettings {
+    hc3_host: String,
+    hc3_user: String,
+    hc3_password: String,
+    hc3_protocol: String,
+    homemap_path: String,
+}
+
+#[tauri::command]
+fn get_app_settings() -> Result<AppSettings, String> {
+    // Load from environment variables or .env file
+    if let Some(home_dir) = dirs::home_dir() {
+        let home_env = home_dir.join(".env");
+        if home_env.exists() {
+            let _ = dotenvy::from_path(&home_env);
+        }
+    }
+    
+    let settings = AppSettings {
+        hc3_host: env::var("HC3_HOST").unwrap_or_default(),
+        hc3_user: env::var("HC3_USER").unwrap_or_default(),
+        hc3_password: env::var("HC3_PASSWORD").unwrap_or_default(),
+        hc3_protocol: env::var("HC3_PROTOCOL").unwrap_or_else(|_| "http".to_string()),
+        homemap_path: env::var("HC3_HOMEMAP").unwrap_or_default(),
+    };
+    
+    Ok(settings)
+}
+
+#[tauri::command]
+fn save_app_settings(settings: AppSettings) -> Result<(), String> {
+    // Save to app config directory
+    let config_dir = dirs::config_dir()
+        .ok_or("Could not find config directory")?
+        .join("HomeMap");
+    
+    fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    
+    let config_file = config_dir.join("settings.json");
+    let json = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    
+    fs::write(&config_file, json)
+        .map_err(|e| format!("Failed to write settings file: {}", e))?;
+    
+    println!("Settings saved to: {:?}", config_file);
+    Ok(())
+}
+
+#[tauri::command]
+async fn select_homemap_folder<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> Result<Option<String>, String> {
+    let folder = tauri::async_runtime::spawn(async move {
+        rfd::AsyncFileDialog::new()
+            .set_title("Select HomeMap Data Folder")
+            .pick_folder()
+            .await
+    })
+    .await
+    .map_err(|e| format!("Failed to show dialog: {}", e))?;
+    
+    Ok(folder.map(|p| p.path().to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+fn load_app_settings() -> Result<Option<AppSettings>, String> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Could not find config directory")?
+        .join("HomeMap");
+    
+    let config_file = config_dir.join("settings.json");
+    
+    if !config_file.exists() {
+        return Ok(None);
+    }
+    
+    let json = fs::read_to_string(&config_file)
+        .map_err(|e| format!("Failed to read settings file: {}", e))?;
+    
+    let settings: AppSettings = serde_json::from_str(&json)
+        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+    
+    Ok(Some(settings))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -279,7 +365,19 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .invoke_handler(tauri::generate_handler![get_hc3_config, get_homemap_config, get_data_path, read_image_as_base64, read_widget_json, save_config, create_config_folder])
+        .invoke_handler(tauri::generate_handler![
+            get_hc3_config, 
+            get_homemap_config, 
+            get_data_path, 
+            read_image_as_base64, 
+            read_widget_json, 
+            save_config, 
+            create_config_folder,
+            get_app_settings,
+            save_app_settings,
+            select_homemap_folder,
+            load_app_settings
+        ])
         .setup(|app| {
             // Create menu items
             let toggle_devtools = MenuItemBuilder::with_id("toggle_devtools", "Toggle DevTools")

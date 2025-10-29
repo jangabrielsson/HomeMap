@@ -22,6 +22,7 @@
         <header>
             <h1>🏠 HomeMap</h1>
             <div class="header-controls">
+                <button id="settingsBtn" class="icon-button" title="Settings">⚙️</button>
                 <label class="edit-toggle">
                     <input type="checkbox" id="editMode">
                     <span>Edit Mode</span>
@@ -40,6 +41,63 @@
                 <p>Loading floors...</p>
             </div>
         </main>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="settings-panel">
+        <div class="settings-content">
+            <div class="settings-header">
+                <h2>⚙️ Settings</h2>
+                <button id="closeSettings" class="close-button">✕</button>
+            </div>
+            
+            <div class="settings-body">
+                <h3>HC3 Connection</h3>
+                <div class="form-group">
+                    <label for="hc3Host">HC3 Host (IP or hostname)</label>
+                    <input type="text" id="hc3Host" placeholder="192.168.1.57">
+                </div>
+                
+                <div class="form-group">
+                    <label for="hc3User">HC3 Username</label>
+                    <input type="text" id="hc3User" placeholder="admin">
+                </div>
+                
+                <div class="form-group">
+                    <label for="hc3Password">HC3 Password</label>
+                    <input type="password" id="hc3Password" placeholder="Enter password">
+                </div>
+                
+                <div class="form-group">
+                    <label for="hc3Protocol">Protocol</label>
+                    <select id="hc3Protocol">
+                        <option value="http">http</option>
+                        <option value="https">https</option>
+                    </select>
+                </div>
+                
+                <h3>Configuration</h3>
+                <div class="form-group">
+                    <label for="homemapPath">HomeMap Data Path</label>
+                    <div class="path-input">
+                        <input type="text" id="homemapPath" placeholder="/path/to/homemapdata" readonly>
+                        <button id="browseHomemapPath" class="secondary-button">Browse...</button>
+                    </div>
+                    <small>Location of your homemapdata folder with config.json</small>
+                </div>
+                
+                <div class="settings-actions">
+                    <button id="saveSettings" class="primary-button">Save Settings</button>
+                    <button id="cancelSettings" class="secondary-button">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu" style="display: none;">
+        <div class="context-menu-header">Move device to floor:</div>
+        <div id="contextMenuFloors" class="context-menu-items"></div>
     </div>
     
     <script src="updater.js"></script>
