@@ -222,35 +222,40 @@ fn create_config_folder(app: tauri::AppHandle, destination_path: String) -> Resu
     // Find the template (homemapdata.example)
     // First try to resolve from bundled resources (production)
     let template_path = if let Some(resource_path) = app.path().resource_dir().ok() {
+        // Try direct path first (if we change tauri.conf.json later)
         let template = resource_path.join("homemapdata.example");
-        println!("Checking bundled resource: {:?}", template);
+        
         if template.exists() {
-            println!("Found template in bundled resources");
             template
         } else {
-            // Fallback to development mode - look in parent directories
-            println!("Template not in bundled resources, checking parent dirs");
-            if let Ok(exe_path) = env::current_exe() {
-                if let Some(exe_dir) = exe_path.parent() {
-                    let mut current = exe_dir;
-                    let mut found = None;
-                    for _ in 0..5 {
-                        if let Some(parent) = current.parent() {
-                            let template = parent.join("homemapdata.example");
-                            if template.exists() {
-                                println!("Found template in parent: {:?}", template);
-                                found = Some(template);
-                                break;
-                            }
-                            current = parent;
-                        }
-                    }
-                    found.ok_or("Could not find homemapdata.example template")?
-                } else {
-                    return Err("Could not determine executable directory".to_string());
-                }
+            // Try _up_ folder (current structure with ../homemapdata.example in config)
+            let template = resource_path.join("_up_").join("homemapdata.example");
+            
+            if template.exists() {
+                template
             } else {
-                return Err("Could not determine executable path".to_string());
+                // Fallback to development mode - look in parent directories
+                if let Ok(exe_path) = env::current_exe() {
+                    if let Some(exe_dir) = exe_path.parent() {
+                        let mut current = exe_dir;
+                        let mut found = None;
+                        for _ in 0..5 {
+                            if let Some(parent) = current.parent() {
+                                let template = parent.join("homemapdata.example");
+                                if template.exists() {
+                                    found = Some(template);
+                                    break;
+                                }
+                                current = parent;
+                            }
+                        }
+                        found.ok_or("Could not find homemapdata.example template")?
+                    } else {
+                        return Err("Could not determine executable directory".to_string());
+                    }
+                } else {
+                    return Err("Could not determine executable path".to_string());
+                }
             }
         }
     } else {
