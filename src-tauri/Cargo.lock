@@ -1673,7 +1673,7 @@ dependencies = [
 
 [[package]]
 name = "homemap"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "base64 0.22.1",
  "dirs 5.0.1",
