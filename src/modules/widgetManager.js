@@ -179,11 +179,18 @@ export class WidgetManager {
         
         const state = device.state || {};
         
+        // Check if device has custom parameters that override widget settings
+        let effectiveIconSetMap = widget.iconSetMap;
+        if (device.params?.iconSet) {
+            console.log(`Device ${device.id} uses custom iconSet: ${device.params.iconSet}`);
+            effectiveIconSetMap = await this.loadIconSet(device.params.iconSet, device.params.iconPackage || null);
+        }
+        
         // Render icon
         if (widget.render.icon) {
             const iconName = this.getIconFromRenderDef(state, widget.render.icon);
-            if (iconName && widget.iconSetMap) {
-                const iconPath = widget.iconSetMap[iconName];
+            if (iconName && effectiveIconSetMap) {
+                const iconPath = effectiveIconSetMap[iconName];
                 if (iconPath) {
                     // Check if we need inline SVG for manipulation
                     const needsInlineSvg = widget.render.svg && iconPath.endsWith('.svg');

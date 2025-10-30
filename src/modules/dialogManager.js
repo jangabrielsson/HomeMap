@@ -1,8 +1,85 @@
 // dialogManager.js - UI dialogs for device management and widget interactions
+import { normalizeDeviceFormat } from './deviceHelpers.js';
 
 export class DialogManager {
     constructor(homeMapInstance) {
         this.app = homeMapInstance;
+    }
+
+    /**
+     * Discover available icon sets
+     */
+    async discoverIconSets() {
+        const iconSets = [];
+        const dataPath = this.app.dataPath;
+        
+        console.log('Discovering icon sets in:', dataPath);
+        
+        try {
+            // Check built-in icons
+            try {
+                const builtInPath = `${dataPath}/icons/built-in`;
+                console.log('Checking built-in path:', builtInPath);
+                const builtInDirs = await this.app.invoke('list_directory', { path: builtInPath });
+                console.log('Built-in dirs found:', builtInDirs);
+                builtInDirs.forEach(dir => {
+                    if (dir.endsWith('/')) {
+                        const name = dir.slice(0, -1);
+                        iconSets.push({ name, location: 'built-in', path: `icons/built-in/${name}` });
+                    }
+                });
+            } catch (e) {
+                console.log('No built-in icons folder:', e.message);
+            }
+            
+            // Check user icons (top-level icons folder)
+            try {
+                const iconsPath = `${dataPath}/icons`;
+                console.log('Checking user icons path:', iconsPath);
+                const iconDirs = await this.app.invoke('list_directory', { path: iconsPath });
+                console.log('User icon dirs found:', iconDirs);
+                iconDirs.forEach(dir => {
+                    if (dir.endsWith('/') && dir !== 'built-in/' && dir !== 'packages/') {
+                        const name = dir.slice(0, -1);
+                        iconSets.push({ name, location: 'user', path: `icons/${name}` });
+                    }
+                });
+            } catch (e) {
+                console.log('No user icons folder:', e.message);
+            }
+            
+            // Check package icons
+            try {
+                const packagesPath = `${dataPath}/icons/packages`;
+                console.log('Checking packages path:', packagesPath);
+                const packageDirs = await this.app.invoke('list_directory', { path: packagesPath });
+                console.log('Package dirs found:', packageDirs);
+                for (const pkgDir of packageDirs) {
+                    if (pkgDir.endsWith('/')) {
+                        const pkgName = pkgDir.slice(0, -1);
+                        try {
+                            const pkgIconPath = `${packagesPath}/${pkgName}`;
+                            const iconSetDirs = await this.app.invoke('list_directory', { path: pkgIconPath });
+                            iconSetDirs.forEach(dir => {
+                                if (dir.endsWith('/')) {
+                                    const name = dir.slice(0, -1);
+                                    iconSets.push({ name, location: `package: ${pkgName}`, path: `icons/packages/${pkgName}/${name}` });
+                                }
+                            });
+                        } catch (e) {
+                            // Skip packages without icon folders
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('No package icons folder:', e.message);
+            }
+        } catch (error) {
+            console.error('Error discovering icon sets:', error);
+        }
+        
+        console.log('Total icon sets discovered:', iconSets);
+        return iconSets;
     }
 
     /**
@@ -70,6 +147,25 @@ export class DialogManager {
             }
         }
         
+        // Discover available icon sets
+        const iconSets = await this.discoverIconSets();
+        let iconSetOptions = '<option value="">Use widget default icons</option>';
+        if (iconSets.length > 0) {
+            const grouped = {};
+            iconSets.forEach(set => {
+                if (!grouped[set.location]) grouped[set.location] = [];
+                grouped[set.location].push(set);
+            });
+            
+            for (const [location, sets] of Object.entries(grouped)) {
+                iconSetOptions += `<optgroup label="${location.charAt(0).toUpperCase() + location.slice(1)}">`;
+                sets.forEach(set => {
+                    iconSetOptions += `<option value="${set.name}">${set.name}</option>`;
+                });
+                iconSetOptions += '</optgroup>';
+            }
+        }
+        
         modal.innerHTML = `
             <div class="slider-content edit-dialog">
                 <h3>Add Device</h3>
@@ -90,6 +186,15 @@ export class DialogManager {
                         </select>
                     </div>
                     <div class="form-group">
+                        <label>Custom Icon Set <span style="color: #888; font-size: 0.9em;">(Optional)</span></label>
+                        <select id="addDeviceIconSet" class="form-input">
+                            ${iconSetOptions}
+                        </select>
+                        <small style="color: #888; display: block; margin-top: 4px;">
+                            Override the widget's default icons with your own icon set
+                        </small>
+                    </div>
+                    <div class="form-group">
                         <label>Floors</label>
                         <div class="floors-list">
                             ${floorsHtml}
@@ -108,12 +213,14 @@ export class DialogManager {
         const idInput = modal.querySelector('#addDeviceId');
         const nameInput = modal.querySelector('#addDeviceName');
         const typeSelect = modal.querySelector('#addDeviceType');
+        const iconSetSelect = modal.querySelector('#addDeviceIconSet');
         
         // Add button
         modal.querySelector('.btn-apply').addEventListener('click', async () => {
             const deviceId = parseInt(idInput.value);
             const deviceName = nameInput.value.trim();
             const deviceType = typeSelect.value;
+            const customIconSet = iconSetSelect.value;
             const selectedFloors = Array.from(modal.querySelectorAll('.floor-checkbox input:checked'))
                 .map(cb => cb.value);
             
@@ -161,6 +268,13 @@ export class DialogManager {
                 } else {
                     // Simple widget type
                     device.type = deviceType;
+                }
+                
+                // Add custom parameters if specified
+                if (customIconSet) {
+                    device.params = {
+                        iconSet: customIconSet
+                    };
                 }
                 
                 return device;
@@ -300,6 +414,27 @@ export class DialogManager {
             }
         }
         
+        // Discover available icon sets
+        const iconSets = await this.discoverIconSets();
+        const currentIconSet = device.params?.iconSet || '';
+        let iconSetOptions = '<option value="">Use widget default icons</option>';
+        if (iconSets.length > 0) {
+            const grouped = {};
+            iconSets.forEach(set => {
+                if (!grouped[set.location]) grouped[set.location] = [];
+                grouped[set.location].push(set);
+            });
+            
+            for (const [location, sets] of Object.entries(grouped)) {
+                iconSetOptions += `<optgroup label="${location.charAt(0).toUpperCase() + location.slice(1)}">`;
+                sets.forEach(set => {
+                    const selected = set.name === currentIconSet ? 'selected' : '';
+                    iconSetOptions += `<option value="${set.name}" ${selected}>${set.name}</option>`;
+                });
+                iconSetOptions += '</optgroup>';
+            }
+        }
+        
         modal.innerHTML = `
             <div class="slider-content edit-dialog">
                 <h3>Edit Device</h3>
@@ -313,6 +448,15 @@ export class DialogManager {
                         <select id="editDeviceType" class="form-input">
                             ${widgetOptions}
                         </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Icon Set <span style="color: #888; font-size: 0.9em;">(Optional)</span></label>
+                        <select id="editDeviceIconSet" class="form-input">
+                            ${iconSetOptions}
+                        </select>
+                        <small style="color: #888; display: block; margin-top: 4px;">
+                            Override the widget's default icons with your own icon set
+                        </small>
                     </div>
                     <div class="form-group">
                         <label>Floors</label>
@@ -332,83 +476,111 @@ export class DialogManager {
         
         const nameInput = modal.querySelector('#editDeviceName');
         const typeSelect = modal.querySelector('#editDeviceType');
+        const iconSetSelect = modal.querySelector('#editDeviceIconSet');
         
         // Save button
         modal.querySelector('.btn-apply').addEventListener('click', async () => {
-            const newName = nameInput.value.trim();
-            const newType = typeSelect.value;
-            const selectedFloors = Array.from(modal.querySelectorAll('.floor-checkbox input:checked'))
-                .map(cb => cb.value);
-            
-            if (!newName) {
-                alert('Device name cannot be empty');
-                return;
-            }
-            
-            if (selectedFloors.length === 0) {
-                alert('Device must be on at least one floor');
-                return;
-            }
-            
-            // Update device properties
-            const configDevice = this.app.homemapConfig.devices.find(d => d.id === device.id);
-            if (configDevice) {
-                // Handle widget reference - could be simple type or package/widget
-                let actualType = newType;
-                if (newType.includes('/')) {
-                    // Explicit package reference (e.g., "com.jangabrielsson.gauge/gauge")
-                    configDevice.widget = newType;
-                    device.widget = newType;
-                    // Extract the widget ID part for type
-                    actualType = newType.split('/')[1];
-                } else {
-                    // Simple widget type - remove any existing widget reference
-                    delete configDevice.widget;
-                    delete device.widget;
+            try {
+                const newName = nameInput.value.trim();
+                const newType = typeSelect.value;
+                const customIconSet = iconSetSelect.value;
+                const selectedFloors = Array.from(modal.querySelectorAll('.floor-checkbox input:checked'))
+                    .map(cb => cb.value);
+                
+                if (!newName) {
+                    alert('Device name cannot be empty');
+                    return;
                 }
                 
-                const typeChanged = configDevice.type !== actualType;
+                if (selectedFloors.length === 0) {
+                    alert('Device must be on at least one floor');
+                    return;
+                }
                 
-                configDevice.name = newName;
-                configDevice.type = actualType;
-                device.name = newName;
-                device.type = actualType;
-                
-                // Update floor assignments
-                const currentFloors = this.app.getDeviceFloors(device);
-                
-                // Remove from floors no longer selected
-                for (const floorId of currentFloors) {
-                    if (!selectedFloors.includes(floorId)) {
-                        this.app.removeDeviceFromFloor(device, floorId);
+                // Update device properties
+                const configDevice = this.app.homemapConfig.devices.find(d => d.id === device.id);
+                if (configDevice) {
+                    // Handle widget reference - could be simple type or package/widget
+                    let actualType = newType;
+                    if (newType.includes('/')) {
+                        // Explicit package reference (e.g., "com.jangabrielsson.gauge/gauge")
+                        configDevice.widget = newType;
+                        device.widget = newType;
+                        // Extract the widget ID part for type
+                        actualType = newType.split('/')[1];
+                    } else {
+                        // Simple widget type - remove any existing widget reference
+                        delete configDevice.widget;
+                        delete device.widget;
                     }
-                }
-                
-                // Add to newly selected floors
-                for (const floorId of selectedFloors) {
-                    if (!currentFloors.includes(floorId)) {
-                        const position = this.app.getDevicePosition(device, this.app.currentFloor) || { x: 500, y: 300 };
-                        this.app.addDeviceToFloor(device, floorId, position);
+                    
+                    const typeChanged = configDevice.type !== actualType;
+                    
+                    configDevice.name = newName;
+                    configDevice.type = actualType;
+                    device.name = newName;
+                    device.type = actualType;
+                    
+                    // Handle custom parameters
+                    if (customIconSet) {
+                        if (!configDevice.params) configDevice.params = {};
+                        if (!device.params) device.params = {};
+                        configDevice.params.iconSet = customIconSet;
+                        device.params.iconSet = customIconSet;
+                    } else {
+                        // Remove iconSet if empty
+                        if (configDevice.params?.iconSet) delete configDevice.params.iconSet;
+                        if (device.params?.iconSet) delete device.params.iconSet;
+                        // Clean up empty params object
+                        if (configDevice.params && Object.keys(configDevice.params).length === 0) delete configDevice.params;
+                        if (device.params && Object.keys(device.params).length === 0) delete device.params;
                     }
-                }
-                
-                // Normalize format (convert back to single-floor if only one floor)
-                this.app.normalizeDeviceFormat(device);
-                this.app.normalizeDeviceFormat(configDevice);
-                
-                await this.app.saveConfig();
-                
-                // If type changed, reload to update widget
-                if (typeChanged) {
-                    console.log('Device type changed, reloading...');
-                    await this.app.loadDevices();
-                    this.app.renderFloors();
+                    
+                    // Update floor assignments
+                    const currentFloors = this.app.getDeviceFloors(device);
+                    
+                    // Remove from floors no longer selected
+                    for (const floorId of currentFloors) {
+                        if (!selectedFloors.includes(floorId)) {
+                            this.app.removeDeviceFromFloor(device, floorId);
+                        }
+                    }
+                    
+                    // Add to newly selected floors
+                    for (const floorId of selectedFloors) {
+                        if (!currentFloors.includes(floorId)) {
+                            const position = this.app.getDevicePosition(device, this.app.currentFloor) || { x: 500, y: 300 };
+                            this.app.addDeviceToFloor(device, floorId, position);
+                        }
+                    }
+                    
+                    // Normalize format (convert back to single-floor if only one floor)
+                    normalizeDeviceFormat(device);
+                    normalizeDeviceFormat(configDevice);
+                    
+                    await this.app.saveConfig();
+                    
+                    // If type changed, reload to update widget
+                    if (typeChanged) {
+                        console.log('Device type changed, reloading...');
+                        await this.app.loadDevices();
+                        this.app.floorManager.renderFloors();
+                    } else {
+                        this.app.floorManager.renderFloors();
+                    }
+                    
+                    console.log('About to close modal...');
+                    // Close the dialog
+                    document.body.removeChild(modal);
+                    console.log('Modal closed');
                 } else {
-                    this.app.renderFloors();
+                    console.error('Device not found in config');
+                    alert('Error: Device not found in configuration');
                 }
+            } catch (error) {
+                console.error('Error saving device:', error);
+                alert('Error saving device: ' + error.message);
             }
-            
-            document.body.removeChild(modal);
         });
         
         // Cancel button

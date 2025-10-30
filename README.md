@@ -96,6 +96,31 @@ HomeMap uses a flexible JSON-based widget system. Each widget defines:
 - **Actions**: HC3 API calls for device control
 - **UI**: Interactive dialogs for device control
 
+### Custom Icons
+
+You can use custom icons with any widget by specifying device-level parameters. This allows you to:
+
+- Use built-in widgets with your own icon designs
+- Have different icon styles for different devices of the same type
+- Easily switch between icon sets without editing widget files
+
+**Example:**
+
+```json
+{
+  "id": 123,
+  "name": "Living Room Light",
+  "type": "light",
+  "params": {
+    "iconSet": "myCustomLights"
+  }
+}
+```
+
+Place your custom icons in `homemapdata/icons/myCustomLights/` and the device will use them instead of the widget's default icons. See **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** for complete guide.
+
+### Widget Definition Example
+
 Example widget definition:
 
 ```json
@@ -181,6 +206,7 @@ cargo tauri build
 Comprehensive guides are available in the [`docs/`](docs/) directory:
 
 - **[CONFIGURE.md](CONFIGURE.md)** - Complete configuration guide (widgets, icons, actions, floor plans)
+- **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** - Using custom icons with built-in widgets
 - **[docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)** - Widget JSON format specification and examples
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development setup guide

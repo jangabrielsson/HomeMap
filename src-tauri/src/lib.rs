@@ -260,19 +260,23 @@ fn list_directory(path: String) -> Result<Vec<String>, String> {
     let entries = fs::read_dir(&path_buf)
         .map_err(|e| format!("Failed to read directory: {}", e))?;
     
-    let mut files = Vec::new();
+    let mut items = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
         let file_name = entry.file_name();
         if let Some(name) = file_name.to_str() {
-            // Only include files (not directories)
-            if entry.path().is_file() {
-                files.push(name.to_string());
+            let path = entry.path();
+            if path.is_dir() {
+                // Add trailing slash for directories
+                items.push(format!("{}/", name));
+            } else if path.is_file() {
+                // Regular file
+                items.push(name.to_string());
             }
         }
     }
     
-    Ok(files)
+    Ok(items)
 }
 
 #[tauri::command]

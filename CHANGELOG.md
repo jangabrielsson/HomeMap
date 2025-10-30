@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.15] - 2025-10-30
+
+### Added
+- **Device Parameters System**:
+  - New `params` field in device configuration for customization
+  - Custom icon set support - override widget icons per device
+  - UI fields in Add/Edit Device dialogs for icon set selection
+  - Backward compatible - existing configs work without changes
+  - Documentation: `docs/CUSTOM_ICONS.md` with complete guide
+  - Example icons: `docs/examples/custom-icons/exampleCustomLight/`
+  - Implementation docs: `docs/DEVICE_PARAMS_IMPL.md`
+
+### Changed
+- **Widget Rendering**:
+  - `renderDevice()` checks for `device.params.iconSet` before using widget default
+  - Custom icon sets loaded dynamically at render time
+  - Allows same widget to have different icons on different devices
+
+### Benefits
+- **No Widget Cloning**: Users don't need to duplicate widget files for custom icons
+- **Per-Device Customization**: Each device can use unique icon sets
+- **Theme Support**: Easy to create and switch between visual themes
+- **Non-Destructive**: Original widget definitions remain unchanged
+
+### Future Extensions
+- Support for additional parameters: `iconSize`, `iconColor`, `customStyles`, `rotateIcon`
+- Architecture ready for any device-level customization
+
 ## [0.1.9] - 2025-10-30
 
 ### Added
