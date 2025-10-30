@@ -488,6 +488,25 @@ class HomeMap {
             imageContainer.className = 'floor-image-container';
             imageContainer.style.position = 'relative';
             imageContainer.style.display = 'inline-block';
+            
+            // Add right-click handler for "Add Device"
+            imageContainer.addEventListener('contextmenu', (e) => {
+                if (!this.editMode) return; // Only in edit mode
+                
+                // Check if we clicked on empty space (not on a device)
+                if (e.target.closest('.device')) {
+                    return; // Device will handle its own context menu
+                }
+                
+                e.preventDefault();
+                
+                // Calculate position relative to the image
+                const rect = imageContainer.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                this.showAddDeviceMenu(e.clientX, e.clientY, floor.id, { x, y });
+            });
 
             // Create image
             const img = document.createElement('img');
@@ -672,57 +691,28 @@ class HomeMap {
 
     showContextMenu(x, y, device) {
         const contextMenu = document.getElementById('contextMenu');
-        const floorsContainer = document.getElementById('contextMenuFloors');
         
-        // Clear previous items
-        floorsContainer.innerHTML = '';
+        // Store device reference for Edit/Delete actions
+        this.contextMenuDevice = device;
         
-        // Get all floors this device is on
-        const deviceFloors = this.getDeviceFloors(device);
+        // Setup Edit and Delete handlers
+        const editBtn = document.getElementById('contextMenuEdit');
+        const deleteBtn = document.getElementById('contextMenuDelete');
         
-        // Add menu item for each floor
-        this.homemapConfig.floors.forEach(floor => {
-            const item = document.createElement('div');
-            item.className = 'context-menu-item';
-            
-            // Check if device is on this floor
-            const isOnThisFloor = deviceFloors.includes(floor.id);
-            if (isOnThisFloor) {
-                item.classList.add('current-floor');
-            }
-            
-            item.textContent = floor.name;
-            
-            item.addEventListener('click', async () => {
-                if (isOnThisFloor && deviceFloors.length > 1) {
-                    // Remove from this floor if on multiple floors
-                    this.removeDeviceFromFloor(device, floor.id);
-                    await this.saveConfig();
-                    this.renderFloors();
-                } else if (!isOnThisFloor) {
-                    // Add to this floor (copy position from current floor or any existing floor)
-                    let position = this.getDevicePosition(device, this.currentFloorId);
-                    
-                    // If device not on current floor, get position from any floor it's on
-                    if (!position && deviceFloors.length > 0) {
-                        position = this.getDevicePosition(device, deviceFloors[0]);
-                    }
-                    
-                    // Fall back to default center position if no position found
-                    if (!position) {
-                        position = { x: 500, y: 300 };
-                    }
-                    
-                    this.addDeviceToFloor(device, floor.id, position);
-                    await this.saveConfig();
-                    this.renderFloors();
-                    this.showFloor(floor.id);
-                }
-                // If it's the only floor, do nothing (can't remove)
-                this.hideContextMenu();
-            });
-            
-            floorsContainer.appendChild(item);
+        // Remove old listeners by cloning
+        const newEditBtn = editBtn.cloneNode(true);
+        const newDeleteBtn = deleteBtn.cloneNode(true);
+        editBtn.replaceWith(newEditBtn);
+        deleteBtn.replaceWith(newDeleteBtn);
+        
+        newEditBtn.addEventListener('click', () => {
+            this.hideContextMenu();
+            this.showEditDeviceDialog(device);
+        });
+        
+        newDeleteBtn.addEventListener('click', () => {
+            this.hideContextMenu();
+            this.showDeleteDeviceDialog(device);
         });
         
         // Position the menu
@@ -747,6 +737,363 @@ class HomeMap {
     hideContextMenu() {
         const contextMenu = document.getElementById('contextMenu');
         contextMenu.style.display = 'none';
+        
+        const addDeviceMenu = document.getElementById('addDeviceMenu');
+        if (addDeviceMenu) {
+            addDeviceMenu.style.display = 'none';
+        }
+    }
+
+    showAddDeviceMenu(x, y, floorId, position) {
+        const menu = document.getElementById('addDeviceMenu');
+        
+        // Store context for the add dialog
+        this.addDeviceContext = { floorId, position };
+        
+        const addBtn = document.getElementById('addDeviceMenuItem');
+        
+        // Remove old listener
+        const newAddBtn = addBtn.cloneNode(true);
+        addBtn.replaceWith(newAddBtn);
+        
+        newAddBtn.addEventListener('click', () => {
+            this.hideContextMenu();
+            this.showAddDeviceDialog(floorId, position);
+        });
+        
+        // Position the menu
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+        menu.style.display = 'block';
+        
+        // Hide menu when clicking elsewhere
+        const hideOnClick = (e) => {
+            if (!menu.contains(e.target)) {
+                this.hideContextMenu();
+                document.removeEventListener('click', hideOnClick);
+            }
+        };
+        
+        setTimeout(() => {
+            document.addEventListener('click', hideOnClick);
+        }, 10);
+    }
+
+    showAddDeviceDialog(floorId, position) {
+        const modal = document.createElement('div');
+        modal.className = 'slider-modal';
+        
+        // Build floor checkboxes
+        const floorsHtml = this.homemapConfig.floors.map(floor => {
+            const isChecked = floor.id === floorId; // Default to the floor we clicked on
+            return `
+                <div class="floor-checkbox">
+                    <input type="checkbox" id="add-floor-${floor.id}" value="${floor.id}" ${isChecked ? 'checked' : ''}>
+                    <label for="add-floor-${floor.id}">${floor.name}</label>
+                </div>
+            `;
+        }).join('');
+        
+        // Build widget type options
+        const widgetOptions = Object.keys(this.widgets).map(type => {
+            return `<option value="${type}">${type}</option>`;
+        }).join('');
+        
+        modal.innerHTML = `
+            <div class="slider-content edit-dialog">
+                <h3>Add Device</h3>
+                <div class="edit-form">
+                    <div class="form-group">
+                        <label>Device ID</label>
+                        <input type="number" id="addDeviceId" class="form-input" placeholder="Enter HC3 device ID">
+                    </div>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="addDeviceName" class="form-input" placeholder="Enter device name">
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="addDeviceType" class="form-input">
+                            <option value="">Select widget type</option>
+                            ${widgetOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Floors</label>
+                        <div class="floors-list">
+                            ${floorsHtml}
+                        </div>
+                    </div>
+                </div>
+                <div class="slider-buttons">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-apply">Add Device</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const idInput = modal.querySelector('#addDeviceId');
+        const nameInput = modal.querySelector('#addDeviceName');
+        const typeSelect = modal.querySelector('#addDeviceType');
+        
+        // Add button
+        modal.querySelector('.btn-apply').addEventListener('click', async () => {
+            const deviceId = parseInt(idInput.value);
+            const deviceName = nameInput.value.trim();
+            const deviceType = typeSelect.value;
+            const selectedFloors = Array.from(modal.querySelectorAll('.floor-checkbox input:checked'))
+                .map(cb => parseInt(cb.value));
+            
+            if (!deviceId || isNaN(deviceId)) {
+                alert('Please enter a valid device ID');
+                return;
+            }
+            
+            if (!deviceName) {
+                alert('Device name cannot be empty');
+                return;
+            }
+            
+            if (!deviceType) {
+                alert('Please select a widget type');
+                return;
+            }
+            
+            if (selectedFloors.length === 0) {
+                alert('Device must be on at least one floor');
+                return;
+            }
+            
+            // Check if device ID already exists
+            if (this.homemapConfig.devices.find(d => d.id === deviceId)) {
+                alert(`Device with ID ${deviceId} already exists`);
+                return;
+            }
+            
+            // Create new device with multi-floor format
+            const newDevice = {
+                id: deviceId,
+                name: deviceName,
+                type: deviceType,
+                floors: selectedFloors.map(fId => ({
+                    floor_id: fId,
+                    position: fId === floorId ? position : { x: 500, y: 300 } // Use click position for current floor
+                }))
+            };
+            
+            // Add to config
+            this.homemapConfig.devices.push(newDevice);
+            
+            await this.saveConfig();
+            await this.loadDevices(); // Reload to fetch from HC3
+            this.renderFloors();
+            
+            document.body.removeChild(modal);
+        });
+        
+        // Cancel button
+        modal.querySelector('.btn-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+
+    showEditDeviceDialog(device) {
+        const modal = document.createElement('div');
+        modal.className = 'slider-modal';
+        
+        // Get current device floors
+        const deviceFloors = this.getDeviceFloors(device);
+        
+        // Build floor checkboxes
+        const floorsHtml = this.homemapConfig.floors.map(floor => {
+            const isChecked = deviceFloors.includes(floor.id);
+            return `
+                <div class="floor-checkbox">
+                    <input type="checkbox" id="floor-${floor.id}" value="${floor.id}" ${isChecked ? 'checked' : ''}>
+                    <label for="floor-${floor.id}">${floor.name}</label>
+                </div>
+            `;
+        }).join('');
+        
+        // Build widget type options
+        const widgetOptions = Object.keys(this.widgets).map(type => {
+            const selected = type === device.type ? 'selected' : '';
+            return `<option value="${type}" ${selected}>${type}</option>`;
+        }).join('');
+        
+        modal.innerHTML = `
+            <div class="slider-content edit-dialog">
+                <h3>Edit Device</h3>
+                <div class="edit-form">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="editDeviceName" value="${device.name}" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="editDeviceType" class="form-input">
+                            ${widgetOptions}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Floors</label>
+                        <div class="floors-list">
+                            ${floorsHtml}
+                        </div>
+                    </div>
+                </div>
+                <div class="slider-buttons">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-apply">Save</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const nameInput = modal.querySelector('#editDeviceName');
+        const typeSelect = modal.querySelector('#editDeviceType');
+        
+        // Save button
+        modal.querySelector('.btn-apply').addEventListener('click', async () => {
+            const newName = nameInput.value.trim();
+            const newType = typeSelect.value;
+            const selectedFloors = Array.from(modal.querySelectorAll('.floor-checkbox input:checked'))
+                .map(cb => parseInt(cb.value));
+            
+            if (!newName) {
+                alert('Device name cannot be empty');
+                return;
+            }
+            
+            if (selectedFloors.length === 0) {
+                alert('Device must be on at least one floor');
+                return;
+            }
+            
+            // Update device properties
+            const configDevice = this.homemapConfig.devices.find(d => d.id === device.id);
+            if (configDevice) {
+                const typeChanged = configDevice.type !== newType;
+                
+                configDevice.name = newName;
+                configDevice.type = newType;
+                device.name = newName;
+                device.type = newType;
+                
+                // Update floor assignments
+                const currentFloors = this.getDeviceFloors(device);
+                
+                // Remove from floors no longer selected
+                for (const floorId of currentFloors) {
+                    if (!selectedFloors.includes(floorId)) {
+                        this.removeDeviceFromFloor(device, floorId);
+                    }
+                }
+                
+                // Add to newly selected floors
+                for (const floorId of selectedFloors) {
+                    if (!currentFloors.includes(floorId)) {
+                        const position = this.getDevicePosition(device, this.currentFloorId) || { x: 500, y: 300 };
+                        this.addDeviceToFloor(device, floorId, position);
+                    }
+                }
+                
+                await this.saveConfig();
+                
+                // If type changed, reload to update widget
+                if (typeChanged) {
+                    console.log('Device type changed, reloading...');
+                    await this.loadDevices();
+                    this.renderFloors();
+                } else {
+                    this.renderFloors();
+                }
+            }
+            
+            document.body.removeChild(modal);
+        });
+        
+        // Cancel button
+        modal.querySelector('.btn-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+
+    showDeleteDeviceDialog(device) {
+        const modal = document.createElement('div');
+        modal.className = 'slider-modal';
+        
+        const deviceFloors = this.getDeviceFloors(device);
+        const floorsText = this.homemapConfig.floors
+            .filter(f => deviceFloors.includes(f.id))
+            .map(f => f.name)
+            .join(', ');
+        
+        modal.innerHTML = `
+            <div class="slider-content">
+                <h3>Delete Device</h3>
+                <p style="color: #e0e0e0; margin: 20px 0;">
+                    Are you sure you want to delete <strong>${device.name}</strong>?
+                </p>
+                <p style="color: #888; font-size: 14px; margin-bottom: 20px;">
+                    This will remove the device from floors: ${floorsText}
+                </p>
+                <div class="slider-buttons">
+                    <button class="btn-cancel">Cancel</button>
+                    <button class="btn-delete" style="background: #e74c3c;">Delete</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Delete button
+        modal.querySelector('.btn-delete').addEventListener('click', async () => {
+            // Remove device from all floors
+            for (const floorId of deviceFloors) {
+                this.removeDeviceFromFloor(device, floorId);
+            }
+            
+            // Remove from devices array
+            const index = this.homemapConfig.devices.findIndex(d => d.id === device.id);
+            if (index !== -1) {
+                this.homemapConfig.devices.splice(index, 1);
+            }
+            
+            await this.saveConfig();
+            this.renderFloors();
+            
+            document.body.removeChild(modal);
+        });
+        
+        // Cancel button
+        modal.querySelector('.btn-cancel').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
     }
 
     async moveDeviceToFloor(device, targetFloor) {
