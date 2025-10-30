@@ -261,6 +261,9 @@ class HomeMap {
 
     async openSettings() {
         try {
+            // Reset auth lock when opening settings so user can test connection
+            this.hc3ApiManager.resetAuthLock();
+            
             // Get current settings from backend
             const settings = await this.invoke('get_app_settings');
             
@@ -471,8 +474,17 @@ class HomeMap {
             
             this.floorManager.renderFloors();
             
-            // Start event polling
-            this.startEventPolling();
+            // Start event polling only if we have devices and auth is not locked
+            if (this.homemapConfig.devices && this.homemapConfig.devices.length > 0) {
+                if (!this.hc3ApiManager.isAuthLocked()) {
+                    console.log(`Starting event polling for ${this.homemapConfig.devices.length} devices`);
+                    this.startEventPolling();
+                } else {
+                    console.log('Auth is locked, skipping event polling. Please update credentials in Settings.');
+                }
+            } else {
+                console.log('No devices configured, skipping event polling');
+            }
         } catch (error) {
             console.error('Failed to load HomeMap config:', error);
             this.floorContainerEl.innerHTML = `<p style="color: #f44336;">Error: ${error}</p>`;

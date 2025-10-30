@@ -172,6 +172,8 @@ export class DialogManager {
             console.log('Adding new device(s):', newDevices);
             console.log('Total devices now:', this.app.homemapConfig.devices.length);
             
+            const wasEmpty = this.app.homemapConfig.devices.length === newDevices.length;
+            
             try {
                 await this.app.saveConfig();
                 console.log('Config saved successfully');
@@ -183,6 +185,16 @@ export class DialogManager {
                 // Re-render floors to show the new device
                 this.app.floorManager.renderFloors();
                 console.log('Floors rendered');
+                
+                // Start event polling if this was the first device (but only if auth is not locked)
+                if (wasEmpty && !this.app.eventManager.isPolling) {
+                    if (!this.app.hc3ApiManager.isAuthLocked()) {
+                        console.log('First device added, starting event polling');
+                        this.app.startEventPolling();
+                    } else {
+                        console.log('First device added, but auth is locked - skipping event polling');
+                    }
+                }
             } catch (error) {
                 console.error('Error adding device:', error);
                 alert(`Failed to add device: ${error.message}`);
