@@ -18,7 +18,20 @@ struct HC3Config {
 
 #[tauri::command]
 fn get_hc3_config() -> Result<HC3Config, String> {
-    // Try to load from .env file in the app's directory
+    // First priority: Try to load from settings.json
+    if let Ok(Some(settings)) = load_app_settings() {
+        if !settings.hc3_host.is_empty() {
+            println!("Using HC3 config from settings.json");
+            return Ok(HC3Config {
+                host: settings.hc3_host,
+                user: settings.hc3_user,
+                password: settings.hc3_password,
+                protocol: settings.hc3_protocol,
+            });
+        }
+    }
+    
+    // Second priority: Try to load from .env file in the app's directory
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
             let env_path = exe_dir.join(".env");

@@ -393,11 +393,25 @@ class HomeMap {
 
             await this.invoke('save_app_settings', { settings });
             
+            // Reload config so the app uses the new credentials
+            this.config = await this.invoke('get_hc3_config');
+            console.log('Config reloaded with new credentials');
+            
             // Reset auth lock when credentials are updated
             this.hc3ApiManager.resetAuthLock();
             
+            // Test connection with new credentials
+            await this.hc3ApiManager.testConnection();
+            
             this.closeSettings();
-            alert('Settings saved! Please restart the app for changes to take effect.');
+            
+            // Restart event polling if we have devices and it's not running
+            if (this.homemapConfig?.devices?.length > 0 && !this.eventManager.isPolling) {
+                console.log('Restarting event polling with new credentials');
+                this.startEventPolling();
+            }
+            
+            alert('Settings saved and applied successfully!');
         } catch (error) {
             console.error('Failed to save settings:', error);
             alert('Failed to save settings: ' + error);
