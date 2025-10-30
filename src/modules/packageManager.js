@@ -544,11 +544,13 @@ class PackageManager {
 
     /**
      * Discover available built-in widgets
-     * Returns list of widget IDs found in widgets/built-in directory
+     * Returns list of widget IDs found in widgets/built-in directory (or legacy widgets/ directory)
      */
     async discoverBuiltInWidgets() {
         const widgets = [];
+        const widgetIds = new Set(); // Prevent duplicates
         
+        // Try new location: widgets/built-in/
         try {
             const builtInPath = joinPath(this.dataPath, 'widgets', 'built-in');
             const files = await this.invoke('list_directory', { path: builtInPath });
@@ -556,18 +558,45 @@ class PackageManager {
             for (const file of files) {
                 if (file.endsWith('.json')) {
                     const widgetId = file.replace('.json', '');
-                    widgets.push({
-                        id: widgetId,
-                        package: 'built-in',
-                        fullRef: `built-in/${widgetId}`
-                    });
+                    if (!widgetIds.has(widgetId)) {
+                        widgetIds.add(widgetId);
+                        widgets.push({
+                            id: widgetId,
+                            package: 'built-in',
+                            fullRef: `built-in/${widgetId}`
+                        });
+                    }
                 }
             }
         } catch (error) {
-            console.warn('Could not discover built-in widgets:', error);
+            console.warn('Could not discover built-in widgets from widgets/built-in:', error);
+        }
+        
+        // Try legacy location: widgets/ (for backward compatibility)
+        try {
+            const legacyPath = joinPath(this.dataPath, 'widgets');
+            const files = await this.invoke('list_directory', { path: legacyPath });
+            
+            for (const file of files) {
+                // Skip if it's a directory (like "built-in", "packages", "icons")
+                if (file.endsWith('.json')) {
+                    const widgetId = file.replace('.json', '');
+                    if (!widgetIds.has(widgetId)) {
+                        widgetIds.add(widgetId);
+                        widgets.push({
+                            id: widgetId,
+                            package: 'built-in',
+                            fullRef: `built-in/${widgetId}`
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('Could not discover widgets from legacy location:', error);
         }
         
         return widgets;
+
     }
 
     /**
