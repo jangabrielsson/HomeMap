@@ -1,3 +1,7 @@
+// Constants
+const APP_VERSION = "0.1.4";
+const MIN_WIDGET_VERSION = "0.1.5"; // Minimum compatible widget version
+
 class HomeMap {
     constructor() {
         this.config = null;
@@ -15,6 +19,7 @@ class HomeMap {
         this.isPolling = false;
         this.deviceIcons = new Map(); // Store device icon elements for quick updates
         this.eventDispatch = {}; // Event dispatch table
+        this.iconSets = new Map(); // Cache for loaded icon sets
         this.editMode = false;
         this.draggedDevice = null;
         this.dragOffset = { x: 0, y: 0 };
@@ -325,6 +330,67 @@ class HomeMap {
         }
     }
 
+    /**
+     * Check if a widget version is compatible with the app
+     */
+    isWidgetCompatible(widgetVersion) {
+        if (!widgetVersion) {
+            console.warn('Widget has no version specified, assuming incompatible');
+            return false;
+        }
+        
+        const parseVersion = (v) => v.split('.').map(Number);
+        const [appMajor, appMinor, appPatch] = parseVersion(MIN_WIDGET_VERSION);
+        const [widgetMajor, widgetMinor, widgetPatch] = parseVersion(widgetVersion);
+        
+        // Major version must match
+        if (widgetMajor !== appMajor) return false;
+        
+        // Minor version must be >= minimum
+        if (widgetMinor < appMinor) return false;
+        if (widgetMinor > appMinor) return true;
+        
+        // Patch version must be >= minimum
+        return widgetPatch >= appPatch;
+    }
+
+    /**
+     * Load icon set and detect file extensions
+     */
+    async loadIconSet(iconSetName) {
+        // Check cache first
+        if (this.iconSets.has(iconSetName)) {
+            return this.iconSets.get(iconSetName);
+        }
+        
+        try {
+            // List files in the icon set directory
+            const iconSetPath = `${this.dataPath}/icons/${iconSetName}`;
+            const files = await this.invoke('list_directory', { path: iconSetPath });
+            
+            // Build a map of icon names to full paths
+            const iconMap = {};
+            const supportedExtensions = ['.svg', '.png', '.jpg', '.jpeg'];
+            
+            for (const file of files) {
+                const ext = file.substring(file.lastIndexOf('.')).toLowerCase();
+                if (supportedExtensions.includes(ext)) {
+                    const iconName = file.substring(0, file.lastIndexOf('.'));
+                    iconMap[iconName] = `icons/${iconSetName}/${file}`;
+                }
+            }
+            
+            console.log(`Loaded icon set "${iconSetName}":`, Object.keys(iconMap));
+            
+            // Cache it
+            this.iconSets.set(iconSetName, iconMap);
+            return iconMap;
+        } catch (error) {
+            console.error(`Failed to load icon set "${iconSetName}":`, error);
+            return {};
+        }
+    }
+
     async loadWidgets() {
         this.widgets = {};
         
@@ -334,8 +400,21 @@ class HomeMap {
         for (const type of widgetTypes) {
             try {
                 const jsonContent = await this.invoke('read_widget_json', { widgetType: type });
-                this.widgets[type] = JSON.parse(jsonContent);
-                console.log(`Loaded widget definition for ${type}`);
+                const widget = JSON.parse(jsonContent);
+                
+                // Check widget version compatibility
+                if (!this.isWidgetCompatible(widget.widgetVersion)) {
+                    console.error(`Widget "${type}" version ${widget.widgetVersion} is not compatible with app version ${APP_VERSION} (requires >= ${MIN_WIDGET_VERSION})`);
+                    continue;
+                }
+                
+                // Load icon set if specified
+                if (widget.iconSet) {
+                    widget.iconSetMap = await this.loadIconSet(widget.iconSet);
+                }
+                
+                this.widgets[type] = widget;
+                console.log(`Loaded widget definition for ${type} (version ${widget.widgetVersion})`);
             } catch (error) {
                 console.error(`Failed to load widget ${type}:`, error);
             }
@@ -712,67 +791,223 @@ class HomeMap {
             
             // Get widget definition
             const widget = this.widgets[device.type];
-            if (!widget || !widget.actions || !widget.actions.click) {
-                return; // No click action defined for this widget
+            if (!widget || !widget.ui) {
+                return; // No UI defined for this widget - clicking does nothing
             }
             
-            const action = widget.actions.click;
+            const ui = widget.ui;
             
-            // Handle slider type actions
-            if (action.type === 'slider') {
-                this.showSlider(device, action);
+            // Handle new composable rows format
+            if (ui.rows) {
+                this.showComposableDialog(device, widget, ui);
                 return;
             }
             
-            // Handle direct API call actions
-            try {
-                await this.executeAction(device, action);
-                
-                // Visual feedback
-                deviceEl.style.opacity = '0.5';
-                setTimeout(() => {
-                    deviceEl.style.opacity = '1';
-                }, 200);
-                
-            } catch (error) {
-                console.error(`Failed to execute action for device ${device.id}:`, error);
-                alert(`Failed to execute action: ${error.message}`);
+            // Legacy: Handle slider type UI
+            if (ui.type === 'slider') {
+                this.showSlider(device, widget, ui);
+                return;
+            }
+            
+            // Legacy: Handle buttons type UI
+            if (ui.type === 'buttons') {
+                this.showButtonsDialog(device, widget, ui);
+                return;
             }
         });
     }
 
-    async showSlider(device, action) {
+    async showComposableDialog(device, widget, ui) {
         // Create modal overlay
         const modal = document.createElement('div');
         modal.className = 'slider-modal';
         
-        // Get current device value from HC3
-        let currentValue = 50; // Default
-        try {
-            const url = `${this.config.protocol}://${this.config.host}/api/devices/${device.id}`;
-            const response = await this.http.fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': 'Basic ' + btoa(`${this.config.user}:${this.config.password}`)
+        // Build HTML for each row
+        let rowsHtml = '';
+        for (const row of ui.rows) {
+            let elementsHtml = '';
+            
+            for (const element of row.elements) {
+                switch (element.type) {
+                    case 'button':
+                        elementsHtml += `<button class="primary-button" data-action="${element.action}">${element.label}</button>`;
+                        break;
+                    
+                    case 'label':
+                        elementsHtml += `<label class="ui-label">${element.text}</label>`;
+                        break;
+                    
+                    case 'slider':
+                        const currentValue = device.state?.[element.property] || element.min || 0;
+                        elementsHtml += `
+                            <div class="slider-container-inline" data-property="${element.property}" data-action="${element.action}" data-min="${element.min}" data-max="${element.max}">
+                                <input type="range" min="${element.min}" max="${element.max}" value="${currentValue}" class="inline-slider">
+                                <span class="slider-value-inline">${currentValue}</span>
+                            </div>
+                        `;
+                        break;
                 }
+            }
+            
+            rowsHtml += `<div class="ui-row">${elementsHtml}</div>`;
+        }
+        
+        modal.innerHTML = `
+            <div class="slider-content">
+                <h3>${device.name}</h3>
+                ${rowsHtml}
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Setup slider listeners - execute action on release
+        modal.querySelectorAll('.slider-container-inline').forEach(container => {
+            const slider = container.querySelector('.inline-slider');
+            const valueDisplay = container.querySelector('.slider-value-inline');
+            const actionName = container.dataset.action;
+            const action = widget.actions[actionName];
+            
+            // Update display as slider moves
+            slider.addEventListener('input', () => {
+                const value = parseInt(slider.value);
+                valueDisplay.textContent = value;
             });
             
-            if (response.ok) {
-                const data = await response.json();
-                // Use valueProperty from action definition (e.g., "properties.value")
-                const propertyPath = action.valueProperty || 'properties.value';
-                currentValue = this.getPropertyValue(data, propertyPath) || 50;
+            // Execute action when slider is released
+            const executeSliderAction = async () => {
+                const value = parseInt(slider.value);
+                
+                if (!action) {
+                    console.error(`Action ${actionName} not found in widget`);
+                    return;
+                }
+                
+                try {
+                    console.log(`Executing slider action ${actionName} with value ${value}`);
+                    await this.executeAction(device, action, value);
+                    
+                    // Refresh device state after a short delay
+                    setTimeout(async () => {
+                        await this.updateDeviceIcon(device);
+                    }, 500);
+                } catch (error) {
+                    console.error(`Failed to execute slider action ${actionName}:`, error);
+                    alert(`Failed: ${error.message}`);
+                }
+            };
+            
+            slider.addEventListener('mouseup', executeSliderAction);
+            slider.addEventListener('touchend', executeSliderAction);
+        });
+        
+        // Setup button listeners - execute immediately and close dialog
+        modal.querySelectorAll('.primary-button[data-action]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const actionName = button.dataset.action;
+                const action = widget.actions[actionName];
+                
+                if (!action) {
+                    console.error(`Action ${actionName} not found in widget`);
+                    return;
+                }
+                
+                try {
+                    await this.executeAction(device, action);
+                    document.body.removeChild(modal);
+                    
+                    // Refresh device state after a short delay
+                    setTimeout(async () => {
+                        await this.updateDeviceIcon(device);
+                    }, 500);
+                } catch (error) {
+                    console.error(`Failed to execute action ${actionName}:`, error);
+                    alert(`Failed: ${error.message}`);
+                }
+            });
+        });
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
             }
-        } catch (error) {
-            console.warn('Could not fetch current device value:', error);
-        }
+        });
+    }
+
+    async showButtonsDialog(device, widget, ui) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'slider-modal'; // Reuse slider modal styling
+        
+        const buttonsHtml = ui.buttons.map(btn => 
+            `<button class="primary-button" data-action="${btn.action}">${btn.label}</button>`
+        ).join('');
+        
+        modal.innerHTML = `
+            <div class="slider-content">
+                <h3>${device.name}</h3>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin: 20px 0;">
+                    ${buttonsHtml}
+                </div>
+                <button class="secondary-button" id="cancelButton">Cancel</button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Add button click handlers
+        ui.buttons.forEach(btn => {
+            const buttonEl = modal.querySelector(`[data-action="${btn.action}"]`);
+            buttonEl.addEventListener('click', async () => {
+                try {
+                    const action = widget.actions[btn.action];
+                    if (action) {
+                        await this.executeAction(device, action);
+                        document.body.removeChild(modal);
+                        
+                        // Refresh device icon after action
+                        const deviceInfo = this.deviceIcons.get(device.id);
+                        if (deviceInfo) {
+                            setTimeout(() => {
+                                this.updateDeviceIcon(device, deviceInfo.element, deviceInfo.textElement);
+                            }, 500);
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Failed to execute action ${btn.action}:`, error);
+                    alert(`Failed: ${error.message}`);
+                }
+            });
+        });
+        
+        // Cancel button
+        modal.querySelector('#cancelButton').addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+        
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+
+    async showSlider(device, widget, ui) {
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'slider-modal';
+        
+        // Get current device value from state
+        let currentValue = device.state?.[ui.property] || ui.min || 0;
         
         modal.innerHTML = `
             <div class="slider-content">
                 <h3>${device.name}</h3>
                 <div class="slider-value">${currentValue}%</div>
                 <div class="slider-container">
-                    <input type="range" min="${action.min}" max="${action.max}" value="${currentValue}" id="dimmerSlider">
+                    <input type="range" min="${ui.min}" max="${ui.max}" value="${currentValue}" id="dimmerSlider">
                 </div>
                 <div class="slider-buttons">
                     <button class="btn-cancel">Cancel</button>
@@ -802,8 +1037,19 @@ class HomeMap {
         setBtn.addEventListener('click', async () => {
             const value = parseInt(slider.value);
             try {
-                await this.executeAction(device, action, value);
-                document.body.removeChild(modal);
+                const action = widget.actions[ui.action];
+                if (action) {
+                    await this.executeAction(device, action, value);
+                    document.body.removeChild(modal);
+                    
+                    // Refresh device icon after action
+                    const deviceInfo = this.deviceIcons.get(device.id);
+                    if (deviceInfo) {
+                        setTimeout(() => {
+                            this.updateDeviceIcon(device, deviceInfo.element, deviceInfo.textElement);
+                        }, 500);
+                    }
+                }
             } catch (error) {
                 console.error(`Failed to set value for device ${device.id}:`, error);
                 alert(`Failed to set value: ${error.message}`);
@@ -825,14 +1071,18 @@ class HomeMap {
         
         console.log(`Executing action: ${action.method} ${fullUrl}`);
         
-        // Prepare request body if needed
+        // Prepare request body if action has a body defined
         let requestBody = null;
-        if (action.body && value !== null) {
-            // Deep clone the body and replace ${value} with actual value
+        if (action.body) {
+            // Deep clone the body and replace ${value} with actual value if provided
             const bodyStr = JSON.stringify(action.body);
-            // Replace "${value}" with actual number (no quotes)
-            const replacedStr = bodyStr.replace(/"?\$\{value\}"?/g, value);
-            requestBody = JSON.parse(replacedStr);
+            if (value !== null) {
+                // Replace "${value}" with actual number (no quotes)
+                const replacedStr = bodyStr.replace(/"?\$\{value\}"?/g, value);
+                requestBody = JSON.parse(replacedStr);
+            } else {
+                requestBody = JSON.parse(bodyStr);
+            }
             console.log('Request body object:', requestBody);
         }
         
@@ -903,92 +1153,116 @@ class HomeMap {
             return;
         }
         
-        // Fetch current device status from HC3
-        if (widget.status) {
+        // Initialize device state if not exists
+        if (!device.state) {
+            device.state = { ...widget.state };
+        }
+        
+        // Fetch current device status from HC3 using getters
+        if (widget.getters) {
             try {
-                const api = widget.status.api.replace('${id}', device.id);
-                const url = `${this.config.protocol}://${this.config.host}${api}`;
-                
-                const response = await this.http.fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Basic ${btoa(`${this.config.user}:${this.config.password}`)}`
-                    }
-                });
+                for (const [stateProp, getter] of Object.entries(widget.getters)) {
+                    if (getter.api) {
+                        const api = getter.api.replace('${id}', device.id);
+                        const url = `${this.config.protocol}://${this.config.host}${api}`;
+                        
+                        const response = await this.http.fetch(url, {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Basic ${btoa(`${this.config.user}:${this.config.password}`)}`
+                            }
+                        });
 
-                if (response.ok) {
-                    const text = await response.text();
-                    const data = JSON.parse(text);
-                    
-                    await this.renderDevice(device, data, widget, iconElement, textElement);
-                } else {
-                    console.error(`Failed to fetch status for device ${device.id}: HTTP ${response.status}`);
+                        if (response.ok) {
+                            const text = await response.text();
+                            const data = JSON.parse(text);
+                            
+                            // Debug: Log the raw data to see structure
+                            console.log(`Raw API data for device ${device.id}, getter path '${getter.path}':`, JSON.stringify(data).substring(0, 500));
+                            
+                            // Extract value using path
+                            let value = this.getPropertyValue(data, getter.path);
+                            console.log(`Extracted value before unwrapping for ${stateProp}:`, value, `(type: ${typeof value})`);
+                            
+                            // HC3 sometimes returns objects like {value: X, path: "...", source: "HC"}
+                            // If we got an object with a 'value' property, unwrap it
+                            if (value && typeof value === 'object' && !Array.isArray(value)) {
+                                console.log(`Object structure:`, Object.keys(value), value);
+                                if ('value' in value) {
+                                    console.log(`Unwrapping HC3 value object for ${stateProp} - has 'value' key`);
+                                    value = value.value;
+                                } else {
+                                    console.log(`Object does NOT have 'value' key, keys are:`, Object.keys(value));
+                                }
+                            }
+                            
+                            device.state[stateProp] = value;
+                            console.log(`Set device ${device.id} state.${stateProp} =`, value, `(type: ${typeof value})`);
+                        } else {
+                            console.error(`Failed to fetch status for device ${device.id}: HTTP ${response.status}`);
+                        }
+                    }
                 }
+                
+                // Render with updated state
+                await this.renderDevice(device, widget, iconElement, textElement);
             } catch (error) {
                 console.error(`Error fetching status for device ${device.id}:`, error);
             }
         }
     }
 
-    async renderDevice(device, data, widget, iconElement, textElement) {
-        // Get the valuemap
-        const valuemapName = widget.status.valuemap;
-        const valuemap = widget.valuemaps[valuemapName];
-        
-        if (!valuemap) {
-            console.warn(`No valuemap ${valuemapName} found for device ${device.id}`);
+    async renderDevice(device, widget, iconElement, textElement) {
+        if (!widget.render) {
+            console.warn(`No render definition for device ${device.id}`);
             return;
         }
         
-        // Extract all property values
-        const properties = {};
-        if (Array.isArray(widget.status.properties)) {
-            // New format: array of property paths
-            for (const propPath of widget.status.properties) {
-                const propName = propPath.split('.').pop(); // Get last part as name
-                properties[propName] = this.getPropertyValue(data, propPath);
-            }
-        } else {
-            // Old format (backward compat): single property
-            const value = this.getPropertyValue(data, widget.status.property);
-            properties.value = value;
-        }
-        
-        console.log(`Device ${device.id} properties:`, properties);
+        const state = device.state || {};
         
         // Render icon
-        if (valuemap.icon) {
-            const iconPath = this.getIconFromValuemapDefinition(properties, valuemap.icon);
-            if (iconPath) {
-                await this.loadDeviceIcon(iconElement, iconPath);
+        if (widget.render.icon) {
+            const iconName = this.getIconFromRenderDef(state, widget.render.icon);
+            if (iconName && widget.iconSetMap) {
+                const iconPath = widget.iconSetMap[iconName];
+                if (iconPath) {
+                    await this.loadDeviceIcon(iconElement, iconPath);
+                } else {
+                    console.warn(`Icon "${iconName}" not found in icon set for device ${device.id}`);
+                }
             }
         }
         
-        // Render display text
-        if (valuemap.display && textElement) {
-            const displayText = this.getDisplayText(properties, valuemap.display);
-            if (displayText) {
-                textElement.textContent = displayText;
+        // Render subtext
+        if (widget.render.subtext && textElement) {
+            const shouldShow = widget.render.subtext.visible 
+                ? this.evaluateCondition(state, widget.render.subtext.visible)
+                : true;
+            
+            if (shouldShow) {
+                const text = this.interpolateTemplate(widget.render.subtext.template, state);
+                textElement.textContent = text;
                 textElement.style.display = 'block';
+            } else {
+                textElement.style.display = 'none';
             }
         }
     }
 
-    getIconFromValuemapDefinition(properties, iconDef) {
-        const propValue = properties[iconDef.property];
-        
+    getIconFromRenderDef(state, iconDef) {
         switch (iconDef.type) {
-            case 'boolean':
-                return propValue ? iconDef.true : iconDef.false;
-            
             case 'static':
-                return iconDef.path;
+                return iconDef.icon;
             
-            case 'range':
-                const numValue = Number(propValue);
-                for (const range of iconDef.ranges) {
-                    if (numValue >= range.min && numValue <= range.max) {
-                        return range.path;
+            case 'conditional':
+                const propValue = state[iconDef.property];
+                console.log(`Evaluating conditional icon, property "${iconDef.property}", value:`, propValue, 'state:', state);
+                
+                for (const condition of iconDef.conditions) {
+                    // Create evaluation context with the specific property value
+                    const evalContext = { [iconDef.property]: propValue };
+                    if (this.evaluateCondition(evalContext, condition.when)) {
+                        return condition.icon;
                     }
                 }
                 return null;
@@ -999,42 +1273,70 @@ class HomeMap {
         }
     }
 
-    getDisplayText(properties, displayDef) {
-        const propValue = properties[displayDef.property];
-        let text = displayDef.text;
-        
-        switch (displayDef.type) {
-            case 'epoch':
-                if (displayDef.format === 'timeAgo') {
-                    const timeAgo = this.formatTimeAgo(propValue);
-                    text = text.replace('${timeAgo}', timeAgo);
-                }
-                break;
+    evaluateCondition(state, conditionStr) {
+        let expr = conditionStr; // Declare at function scope for error handler
+        try {
+            // Simple evaluation - replace state properties in condition
             
-            case 'float':
-            case 'integer':
-            case 'string':
-            default:
-                text = text.replace('${value}', propValue);
-                break;
+            console.log(`Evaluating condition "${conditionStr}" with state:`, JSON.stringify(state));
+            console.log(`State has keys:`, Object.keys(state));
+            
+            // Check if state is empty
+            if (Object.keys(state).length === 0) {
+                console.error(`State object is empty! Cannot evaluate condition.`);
+                return false;
+            }
+            
+            for (const [key, value] of Object.entries(state)) {
+                const regex = new RegExp(`\\b${key}\\b`, 'g');
+                
+                console.log(`  Processing key "${key}" (${typeof value}), value:`, value);
+                
+                // Handle different value types
+                if (value === undefined) {
+                    console.warn(`Value for "${key}" is undefined, replacing with undefined`);
+                    expr = expr.replace(regex, 'undefined');
+                } else if (value === null) {
+                    expr = expr.replace(regex, 'null');
+                } else if (typeof value === 'boolean') {
+                    expr = expr.replace(regex, String(value));
+                } else if (typeof value === 'number') {
+                    expr = expr.replace(regex, String(value));
+                } else if (typeof value === 'string') {
+                    expr = expr.replace(regex, `"${value}"`);
+                } else {
+                    // For objects/arrays, try JSON.stringify or skip
+                    console.warn(`Skipping complex value for "${key}":`, typeof value, value);
+                    continue;
+                }
+                
+                console.log(`  After replacing "${key}": "${expr}"`);
+            }
+            
+            console.log(`Final expression: "${expr}"`);
+            
+            if (expr === conditionStr) {
+                console.error(`No replacements were made! Expression unchanged: "${expr}"`);
+                return false;
+            }
+            
+            // eslint-disable-next-line no-eval
+            const result = eval(expr);
+            console.log(`Evaluation result: ${result}`);
+            return result;
+        } catch (error) {
+            console.error(`Error evaluating condition "${conditionStr}":`, error);
+            console.error(`  Final expression was: "${expr}"`);
+            return false;
         }
-        
-        return text;
     }
 
-    formatTimeAgo(epochSeconds) {
-        const now = Date.now();
-        const then = epochSeconds * 1000; // Convert to milliseconds
-        const diffMs = now - then;
-        const diffSeconds = Math.floor(diffMs / 1000);
-        const diffMinutes = Math.floor(diffSeconds / 60);
-        const diffHours = Math.floor(diffMinutes / 60);
-        const diffDays = Math.floor(diffHours / 24);
-        
-        if (diffSeconds < 60) return `${diffSeconds}s ago`;
-        if (diffMinutes < 60) return `${diffMinutes}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        return `${diffDays}d ago`;
+    interpolateTemplate(template, state) {
+        let result = template;
+        for (const [key, value] of Object.entries(state)) {
+            result = result.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), value);
+        }
+        return result;
     }
 
     getPropertyValue(obj, path) {
@@ -1207,10 +1509,10 @@ class HomeMap {
             return;
         }
         
-        // Extract device id from event using the idPath
-        const deviceId = this.getPropertyValue(event.data, dispatch.idPath);
+        // Extract device id from event (usually event.data.id)
+        const deviceId = event.data?.id;
         if (!deviceId) {
-            console.warn(`Could not extract device id from event using path: ${dispatch.idPath}`);
+            console.warn(`Could not extract device id from event`);
             return;
         }
         
@@ -1222,10 +1524,52 @@ class HomeMap {
         }
         
         const { device, widget, eventDef } = dispatchInfo;
-        const property = event.data?.property;
-        const newValue = event.data?.newValue;
         
-        console.log(`Dispatching ${event.type} for device ${deviceId}, property: ${property}, value:`, newValue);
+        console.log(`Dispatching ${event.type} for device ${deviceId}`);
+        console.log(`Event data:`, JSON.stringify(event.data).substring(0, 500));
+        
+        // Check if event matches the property we care about
+        // For DevicePropertyUpdatedEvent, only process if the changed property is in our state
+        if (event.type === 'DevicePropertyUpdatedEvent') {
+            const eventProperty = event.data?.property;
+            console.log(`Event is for property: ${eventProperty}, device state properties:`, Object.keys(device.state || {}));
+            
+            // Only process if we track this property in our state
+            if (eventProperty && device.state && !(eventProperty in device.state)) {
+                console.log(`Ignoring event for property ${eventProperty}, not tracked in device state`);
+                return;
+            }
+        }
+        
+        // Update state from event
+        if (eventDef.updates) {
+            if (!device.state) {
+                device.state = { ...widget.state };
+            }
+            
+            for (const [stateProp, eventPath] of Object.entries(eventDef.updates)) {
+                console.log(`Processing event update: ${stateProp} <- ${eventPath}`);
+                // eventPath like "event.newValue" - extract value from event
+                let value = eventPath.startsWith('event.') 
+                    ? event.data[eventPath.substring(6)]  // Skip "event." prefix
+                    : this.getPropertyValue(event, eventPath);
+                
+                console.log(`Extracted value from event for ${stateProp}:`, value, `(type: ${typeof value})`);
+                
+                // HC3 sometimes returns objects like {value: X, path: "...", source: "HC"}
+                // If we got an object with a 'value' property, unwrap it
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                    console.log(`Object has keys:`, Object.keys(value));
+                    if ('value' in value) {
+                        console.log(`Unwrapping HC3 value object from event for ${stateProp}`);
+                        value = value.value;
+                    }
+                }
+                
+                device.state[stateProp] = value;
+                console.log(`Updated device ${deviceId} state.${stateProp} =`, value, `(type: ${typeof value})`);
+            }
+        }
         
         // Get the icon and text elements
         const deviceInfo = this.deviceIcons.get(deviceId);
@@ -1237,29 +1581,8 @@ class HomeMap {
         const iconElement = deviceInfo.element;
         const textElement = deviceInfo.textElement;
         
-        console.log(`Event triggered re-render for device ${deviceId}`);
-        
-        // Re-fetch device data and re-render
-        // This is simpler than trying to patch individual properties from events
-        try {
-            const api = widget.status.api.replace('${id}', deviceId);
-            const url = `${this.config.protocol}://${this.config.host}${api}`;
-            
-            const response = await this.http.fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Basic ${btoa(`${this.config.user}:${this.config.password}`)}`
-                }
-            });
-
-            if (response.ok) {
-                const text = await response.text();
-                const data = JSON.parse(text);
-                await this.renderDevice(device, data, widget, iconElement, textElement);
-            }
-        } catch (error) {
-            console.error(`Error re-rendering device ${deviceId}:`, error);
-        }
+        // Re-render with updated state
+        await this.renderDevice(device, widget, iconElement, textElement);
     }
 
 }

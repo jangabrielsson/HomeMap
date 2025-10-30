@@ -326,6 +326,96 @@ main {
     background: #2980b9;
 }
 
+.slider-buttons .btn-apply {
+    background: #27ae60;
+    color: white;
+}
+
+.slider-buttons .btn-apply:hover {
+    background: #229954;
+}
+
+/* Composable UI Elements */
+.ui-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 15px 0;
+    flex-wrap: wrap;
+}
+
+.ui-label {
+    color: #ecf0f1;
+    font-size: 14px;
+    font-weight: 500;
+    min-width: 60px;
+}
+
+.primary-button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    background: #3498db;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex: 1;
+}
+
+.primary-button:hover {
+    background: #2980b9;
+}
+
+.primary-button:active {
+    background: #21618c;
+}
+
+.slider-container-inline {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.slider-container-inline .inline-slider {
+    flex: 1;
+    height: 8px;
+    border-radius: 4px;
+    background: #34495e;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.slider-container-inline .inline-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+}
+
+.slider-container-inline .inline-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #3498db;
+    cursor: pointer;
+    border: none;
+}
+
+.slider-value-inline {
+    color: #3498db;
+    font-size: 16px;
+    font-weight: bold;
+    min-width: 40px;
+    text-align: right;
+}
+
 /* Settings Panel */
 .settings-panel {
     position: fixed;

@@ -172,6 +172,34 @@ fn read_widget_json(widget_type: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn list_directory(path: String) -> Result<Vec<String>, String> {
+    let path_buf = PathBuf::from(&path);
+    
+    // Security check: ensure path is within homemap data directory
+    let homemap_path = get_homemap_data_path()?;
+    if !path_buf.starts_with(&homemap_path) {
+        return Err("Access denied: path must be within homemap data directory".to_string());
+    }
+    
+    let entries = fs::read_dir(&path_buf)
+        .map_err(|e| format!("Failed to read directory: {}", e))?;
+    
+    let mut files = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+        let file_name = entry.file_name();
+        if let Some(name) = file_name.to_str() {
+            // Only include files (not directories)
+            if entry.path().is_file() {
+                files.push(name.to_string());
+            }
+        }
+    }
+    
+    Ok(files)
+}
+
+#[tauri::command]
 fn save_config(config_json: String) -> Result<(), String> {
     let homemap_path = get_homemap_data_path()?;
     let config_path = homemap_path.join("config.json");
@@ -370,7 +398,8 @@ pub fn run() {
             get_homemap_config, 
             get_data_path, 
             read_image_as_base64, 
-            read_widget_json, 
+            read_widget_json,
+            list_directory,
             save_config, 
             create_config_folder,
             get_app_settings,
