@@ -88,41 +88,71 @@ Updates are downloaded from the [GitHub Releases](https://github.com/jangabriels
 
 ## Widget System
 
-HomeMap uses a flexible JSON-based widget system. Each device type is defined by:
+HomeMap uses a flexible JSON-based widget system. Each widget defines:
 
-- **Valuemaps**: Icon and display rendering definitions
-- **Status API**: Properties to fetch from HC3
-- **Events**: Event types to listen for
+- **State**: Device properties to track
+- **Events**: JSONPath patterns for HC3 event matching
+- **Render**: Icon sets, badges, and dynamic styling
+- **Actions**: HC3 API calls for device control
+- **UI**: Interactive dialogs for device control
 
 Example widget definition:
 
 ```json
 {
-  "valuemaps": {
-    "light": {
-      "icon": {
-        "property": "value",
-        "type": "boolean",
-        "true": "icons/light-on.svg",
-        "false": "icons/light-off.svg"
-      }
-    }
+  "id": "binarySwitch",
+  "name": "Binary Switch",
+  "type": "com.fibaro.binarySwitch",
+  
+  "state": {
+    "value": false
   },
-  "status": {
-    "api": "/api/devices/${id}",
-    "properties": ["properties.value"],
-    "valuemap": "light"
-  },
+  
   "events": {
-    "DevicePropertyUpdatedEvent": {
-      "id": "id",
-      "valuemap": "light"
+    "value": {
+      "match": "$[?(@.property=='value')]",
+      "update": "newValue"
     }
+  },
+  
+  "render": {
+    "icon": {
+      "set": "light",
+      "template": "value ? 'on' : 'off'"
+    },
+    "badge": {
+      "template": "value ? 'ON' : 'OFF'"
+    }
+  },
+  
+  "actions": {
+    "turnOn": {
+      "method": "POST",
+      "api": "/api/devices/${id}/action/turnOn"
+    },
+    "turnOff": {
+      "method": "POST",
+      "api": "/api/devices/${id}/action/turnOff"
+    }
+  },
+  
+  "ui": {
+    "type": "toggle",
+    "property": "value",
+    "onAction": "turnOn",
+    "offAction": "turnOff"
   }
 }
 ```
 
-See included widget examples in `homemapdata/widgets/` for more patterns.
+**Advanced Features (v0.1.7+):**
+- Expression evaluation in templates (`${value * 1.8 - 90}`)
+- SVG manipulation for dynamic graphics
+- Conditional updates with OR logic
+- Composable UI with buttons, sliders, and color pickers
+- Dynamic styling for colored effects
+
+See [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md) for complete specification and examples.
 
 ## Development
 
