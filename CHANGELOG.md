@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2025-10-30
+
+### Added
+- **View Zoom Controls**:
+  - Zoom slider (50% - 200% range)
+  - Quick zoom buttons: +/- for increment/decrement
+  - "Fit to Window" button for auto-scaling to available space
+  - "Reset" button to return to 100%
+  - Per-floor zoom memory - each floor remembers its zoom level
+  - Zoom settings persist across sessions via localStorage
+  - Transform-based scaling for smooth performance
+
+### Changed
+- **Zoom Controls UI**:
+  - Zoom controls only visible in Edit Mode
+  - Integrated into header bar to save screen space
+  - Compact design with smaller buttons and slider
+  - No dedicated row taking up vertical space
+  - Contextual appearance - hidden during normal use
+
+### Improved
+- **User Experience**:
+  - Users can scale entire floor view to fill window
+  - Smaller floor plan images can be zoomed up for larger relative widget sizes
+  - Better utilization of available screen space
+  - Zoom level restores automatically when switching between floors
+
 ## [0.1.8] - 2025-10-30
 
 ### Added
