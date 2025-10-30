@@ -416,6 +416,55 @@ main {
     text-align: right;
 }
 
+/* Color Picker */
+.color-select-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 0;
+}
+
+.color-picker {
+    width: 100%;
+    height: 50px;
+    border: 2px solid #34495e;
+    border-radius: 8px;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+    border: none;
+    border-radius: 6px;
+}
+
+.color-rgb-display {
+    display: flex;
+    justify-content: space-around;
+    gap: 10px;
+    padding: 8px;
+    background: rgba(52, 73, 94, 0.3);
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.color-rgb-display span {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.rgb-value {
+    font-weight: bold;
+    color: #3498db;
+    min-width: 30px;
+    text-align: right;
+}
+
 /* Settings Panel */
 .settings-panel {
     position: fixed;

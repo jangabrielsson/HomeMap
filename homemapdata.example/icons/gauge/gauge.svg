@@ -1,0 +1,39 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gauge background arc -->
+  <path d="M 10 50 A 22 22 0 1 1 54 50" 
+        fill="none" 
+        stroke="#34495e" 
+        stroke-width="6" 
+        stroke-linecap="round"/>
+  
+  <!-- Gauge colored segments -->
+  <path d="M 10 50 A 22 22 0 0 1 18 32" 
+        fill="none" 
+        stroke="#27ae60" 
+        stroke-width="6" 
+        stroke-linecap="round"/>
+  
+  <path d="M 18 32 A 22 22 0 0 1 32 18" 
+        fill="none" 
+        stroke="#f39c12" 
+        stroke-width="6" 
+        stroke-linecap="round"/>
+  
+  <path d="M 32 18 A 22 22 0 0 1 46 32" 
+        fill="none" 
+        stroke="#e74c3c" 
+        stroke-width="6" 
+        stroke-linecap="round"/>
+  
+  <!-- Center pivot -->
+  <circle cx="32" cy="50" r="4" fill="#2c3e50"/>
+  
+  <!-- Needle - this will rotate -->
+  <g transform-origin="32 50">
+    <line x1="32" y1="50" x2="32" y2="30" 
+          stroke="#e74c3c" 
+          stroke-width="2" 
+          stroke-linecap="round"/>
+    <circle cx="32" cy="50" r="2" fill="#e74c3c"/>
+  </g>
+</svg>

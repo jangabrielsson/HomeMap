@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-10-30
+
+### Changed
+- **Major Code Refactoring**: Improved codebase organization and maintainability
+  - Extracted 8 specialized manager modules from monolithic script.js
+  - Reduced main script from 1,951 lines to 449 lines (77% reduction)
+  - Clear separation of concerns with manager pattern architecture
+- **Module Architecture**:
+  - `utils.js` (47 lines) - Constants and utility functions
+  - `deviceHelpers.js` (122 lines) - Multi-floor device support with auto-normalization
+  - `eventManager.js` (187 lines) - HC3 event polling and dispatch
+  - `widgetManager.js` (245 lines) - Widget loading and rendering
+  - `dialogManager.js` (590 lines) - All UI dialogs (Add/Edit/Delete + widget UIs)
+  - `floorManager.js` (269 lines) - Floor rendering, navigation, and drag-and-drop
+  - `contextMenuManager.js` (125 lines) - Context menu handling
+  - `hc3ApiManager.js` (213 lines) - HC3 API communication and device state management
+- **Device Format Normalization**: Automatic conversion between single-floor and multi-floor formats
+  - Devices on single floor use compact format: `{id, name, type, floor_id, position}`
+  - Devices on multiple floors use array format: `{id, name, type, floors: [{floor_id, position}]}`
+  - Auto-converts to simpler format when device removed from all but one floor
+
+### Fixed
+- Updated example configuration (`homemapdata.example`) to use new widget format
+- Widget version compatibility checking now properly validates minimum version (0.1.5)
+- Device format consistency across add/edit/delete operations
+
+### Technical Details
+- Total codebase: 2,247 lines across 9 files (vs. original 1,951 lines in single file)
+- Manager pattern: Each manager receives HomeMap instance for context access
+- ES6 modules with named exports/imports
+- Improved code navigability and testability
+- Each module has a single, well-defined responsibility
+
 ## [0.1.5] - 2025-10-30
 
 ### Added
@@ -97,5 +130,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Time formatting (timeAgo) for timestamps
 - Configurable widget definitions (JSON-based)
 
+[0.1.6]: https://github.com/jangabrielsson/HomeMap/releases/tag/v0.1.6
 [0.1.5]: https://github.com/jangabrielsson/HomeMap/releases/tag/v0.1.5
 [0.1.0]: https://github.com/jangabrielsson/HomeMap/releases/tag/v0.1.0

@@ -65,11 +65,26 @@ export class HC3ApiManager {
         // Prepare request body if action has a body defined
         let requestBody = null;
         if (action.body) {
-            // Deep clone the body and replace ${value} with actual value if provided
+            // Deep clone the body
             const bodyStr = JSON.stringify(action.body);
+            
             if (value !== null) {
-                // Replace "${value}" with actual number (no quotes)
-                const replacedStr = bodyStr.replace(/"?\$\{value\}"?/g, value);
+                let replacedStr = bodyStr;
+                
+                // If value is an object (like RGB color), replace each property
+                if (typeof value === 'object' && !Array.isArray(value)) {
+                    console.log('Replacing template variables with object:', value);
+                    for (const [key, val] of Object.entries(value)) {
+                        // Replace "${key}" with actual value (no quotes for numbers)
+                        const regex = new RegExp(`"?\\$\\{${key}\\}"?`, 'g');
+                        replacedStr = replacedStr.replace(regex, val !== undefined ? val : 0);
+                    }
+                } else {
+                    // Single value replacement (backward compatibility)
+                    replacedStr = bodyStr.replace(/"?\$\{value\}"?/g, value);
+                }
+                
+                console.log('Body after replacement:', replacedStr);
                 requestBody = JSON.parse(replacedStr);
             } else {
                 requestBody = JSON.parse(bodyStr);
@@ -193,6 +208,20 @@ export class HC3ApiManager {
                                 } else {
                                     console.log(`Object does NOT have 'value' key, keys are:`, Object.keys(value));
                                 }
+                            }
+                            
+                            // Parse color string if needed (HC3 format: "R,G,B,WW,CW")
+                            // colorComponents is already an object, but color property is a string
+                            if (stateProp === 'colorComponents' && typeof value === 'string') {
+                                const parts = value.split(',').map(n => parseInt(n.trim()));
+                                value = {
+                                    red: parts[0] || 0,
+                                    green: parts[1] || 0,
+                                    blue: parts[2] || 0,
+                                    warmWhite: parts[3] || 0,
+                                    coldWhite: parts[4] || 0
+                                };
+                                console.log(`Parsed color string to colorComponents object:`, value);
                             }
                             
                             device.state[stateProp] = value;

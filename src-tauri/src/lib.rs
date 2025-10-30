@@ -161,6 +161,12 @@ fn read_image_as_base64(image_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn read_file_as_text(file_path: String) -> Result<String, String> {
+    fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read file {}: {}", file_path, e))
+}
+
+#[tauri::command]
 fn read_widget_json(widget_type: String) -> Result<String, String> {
     let homemap_path = get_homemap_data_path()?;
     let widget_path = homemap_path.join("widgets").join(format!("{}.json", widget_type));
@@ -397,7 +403,8 @@ pub fn run() {
             get_hc3_config, 
             get_homemap_config, 
             get_data_path, 
-            read_image_as_base64, 
+            read_image_as_base64,
+            read_file_as_text,
             read_widget_json,
             list_directory,
             save_config, 

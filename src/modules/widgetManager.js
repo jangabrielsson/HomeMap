@@ -105,7 +105,14 @@ export class WidgetManager {
             if (iconName && widget.iconSetMap) {
                 const iconPath = widget.iconSetMap[iconName];
                 if (iconPath) {
-                    await this.loadDeviceIcon(iconElement, iconPath);
+                    // Check if we need inline SVG for manipulation
+                    const needsInlineSvg = widget.render.svg && iconPath.endsWith('.svg');
+                    
+                    if (needsInlineSvg) {
+                        await this.loadInlineSvg(iconElement, iconPath, widget, state);
+                    } else {
+                        await this.loadDeviceIcon(iconElement, iconPath);
+                    }
                 } else {
                     console.warn(`Icon "${iconName}" not found in icon set for device ${device.id}`);
                 }
@@ -124,6 +131,17 @@ export class WidgetManager {
                 textElement.style.display = 'block';
             } else {
                 textElement.style.display = 'none';
+            }
+        }
+        
+        // Apply custom styles to icon
+        if (widget.render.style && iconElement) {
+            console.log(`Applying custom styles. State:`, JSON.stringify(state, null, 2));
+            for (const [styleProp, styleValue] of Object.entries(widget.render.style)) {
+                console.log(`Processing style ${styleProp} with template: ${styleValue}`);
+                const interpolatedValue = this.interpolateTemplate(styleValue, state);
+                iconElement.style[styleProp] = interpolatedValue;
+                console.log(`Applied style ${styleProp}: ${interpolatedValue}`);
             }
         }
     }
@@ -218,12 +236,88 @@ export class WidgetManager {
 
     /**
      * Interpolate template string with state values
+     * Supports nested properties like ${colorComponents.red} and expressions like ${value * 1.8}
      */
     interpolateTemplate(template, state) {
         let result = template;
-        for (const [key, value] of Object.entries(state)) {
-            result = result.replace(new RegExp(`\\$\\{${key}\\}`, 'g'), value);
-        }
+        
+        // Match ${property} or ${expression}
+        const regex = /\$\{([^}]+)\}/g;
+        result = result.replace(regex, (match, expression) => {
+            console.log(`Interpolating expression: ${expression}`);
+            
+            // Check if it's a simple expression (contains operators like *, +, -, /, >, <, etc.)
+            if (/[*+\-/<>!=]/.test(expression)) {
+                try {
+                    // Replace property names with their values
+                    let evalExpr = expression;
+                    
+                    // Find all property references (words that might be properties)
+                    // Sort by length descending to replace longer names first (e.g., "colorComponents.red" before "value")
+                    const propertyRefs = [...new Set(expression.match(/[a-zA-Z_][a-zA-Z0-9_.]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*|[a-zA-Z_][a-zA-Z0-9_]*/g))];
+                    propertyRefs.sort((a, b) => b.length - a.length);
+                    
+                    for (const propPath of propertyRefs) {
+                        // Skip if it looks like a number or keyword
+                        if (/^\d+$/.test(propPath)) continue;
+                        
+                        // Traverse nested properties
+                        const keys = propPath.split('.');
+                        let value = state;
+                        
+                        for (const key of keys) {
+                            if (value && typeof value === 'object' && key in value) {
+                                value = value[key];
+                            } else {
+                                value = undefined;
+                                break;
+                            }
+                        }
+                        
+                        if (value !== undefined) {
+                            // Replace the property reference with its value
+                            const regex = new RegExp(`\\b${propPath.replace(/\./g, '\\.')}\\b`, 'g');
+                            evalExpr = evalExpr.replace(regex, value);
+                            console.log(`  Replaced ${propPath} with ${value}: ${evalExpr}`);
+                        }
+                    }
+                    
+                    // Evaluate the expression
+                    console.log(`  Evaluating: ${evalExpr}`);
+                    // eslint-disable-next-line no-eval
+                    const result = eval(evalExpr);
+                    console.log(`  Result: ${result}`);
+                    return result;
+                } catch (error) {
+                    console.error(`Error evaluating expression "${expression}":`, error);
+                    return match;
+                }
+            }
+            
+            // Otherwise, treat as a property path
+            const keys = expression.split('.');
+            let value = state;
+            
+            for (const key of keys) {
+                console.log(`  Traversing key: ${key}, current value type: ${typeof value}`);
+                if (value && typeof value === 'object' && key in value) {
+                    value = value[key];
+                    console.log(`  Found value: ${value}`);
+                } else {
+                    console.warn(`Property path "${expression}" not found in state at key "${key}"`);
+                    // For color components, return 0 as default instead of original template
+                    if (expression.startsWith('colorComponents.')) {
+                        console.log(`Returning default value 0 for missing color component`);
+                        return 0;
+                    }
+                    return match; // Return original if not found
+                }
+            }
+            
+            console.log(`Final interpolated value for ${expression}: ${value}`);
+            return value !== undefined ? value : match;
+        });
+        
         return result;
     }
 
@@ -239,6 +333,53 @@ export class WidgetManager {
             console.log(`Icon loaded successfully for ${iconPath}`);
         } catch (error) {
             console.error(`Failed to load icon ${iconPath}:`, error);
+            console.error(`Full path attempted: ${fullPath}`);
+        }
+    }
+    
+    /**
+     * Load SVG inline and apply dynamic styles to internal elements
+     */
+    async loadInlineSvg(iconElement, iconPath, widget, state) {
+        const fullPath = `${this.dataPath}/${iconPath}`;
+        console.log(`Loading inline SVG from: ${fullPath}`);
+        
+        try {
+            // Read SVG as text
+            const svgText = await this.invoke('read_file_as_text', { filePath: fullPath });
+            
+            // Create a temporary container to parse the SVG
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+            const svgElement = svgDoc.documentElement;
+            
+            // Set size attributes
+            svgElement.setAttribute('width', '32px');
+            svgElement.setAttribute('height', '32px');
+            
+            // Apply SVG-specific styles if defined
+            if (widget.render.svg) {
+                const selector = widget.render.svg.selector || 'g';
+                const targetElement = svgElement.querySelector(selector);
+                
+                if (targetElement && widget.render.svg.style) {
+                    for (const [styleProp, styleValue] of Object.entries(widget.render.svg.style)) {
+                        const interpolatedValue = this.interpolateTemplate(styleValue, state);
+                        targetElement.style[styleProp] = interpolatedValue;
+                        console.log(`Applied SVG style to ${selector} - ${styleProp}: ${interpolatedValue}`);
+                    }
+                }
+            }
+            
+            // Replace the img element with the inline SVG
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgElement);
+            const base64Svg = `data:image/svg+xml;base64,${btoa(svgString)}`;
+            iconElement.src = base64Svg;
+            
+            console.log(`Inline SVG loaded and styled successfully for ${iconPath}`);
+        } catch (error) {
+            console.error(`Failed to load inline SVG ${iconPath}:`, error);
             console.error(`Full path attempted: ${fullPath}`);
         }
     }

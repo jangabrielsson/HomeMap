@@ -366,6 +366,22 @@ export class DialogManager {
                             </div>
                         `;
                         break;
+                    
+                    case 'colorSelect':
+                        const colorState = device.state?.colorComponents || { red: 0, green: 0, blue: 0 };
+                        const hexColor = this.rgbToHex(colorState.red || 0, colorState.green || 0, colorState.blue || 0);
+                        elementsHtml += `
+                            <div class="color-select-container" data-property="${element.property}" data-action="${element.action}">
+                                <label class="ui-label">${element.label || 'Color'}</label>
+                                <input type="color" value="${hexColor}" class="color-picker">
+                                <div class="color-rgb-display">
+                                    <span>R: <span class="rgb-value red-value">${colorState.red || 0}</span></span>
+                                    <span>G: <span class="rgb-value green-value">${colorState.green || 0}</span></span>
+                                    <span>B: <span class="rgb-value blue-value">${colorState.blue || 0}</span></span>
+                                </div>
+                            </div>
+                        `;
+                        break;
                 }
             }
             
@@ -442,6 +458,61 @@ export class DialogManager {
                     }, 500);
                 } catch (error) {
                     console.error(`Failed to execute action ${actionName}:`, error);
+                    alert(`Failed: ${error.message}`);
+                }
+            });
+        });
+        
+        // Setup color picker listeners
+        modal.querySelectorAll('.color-select-container').forEach(container => {
+            const colorPicker = container.querySelector('.color-picker');
+            const actionName = container.dataset.action;
+            const action = widget.actions[actionName];
+            const redDisplay = container.querySelector('.red-value');
+            const greenDisplay = container.querySelector('.green-value');
+            const blueDisplay = container.querySelector('.blue-value');
+            
+            console.log(`Setting up color picker for action: ${actionName}`, action);
+            
+            // Update RGB display as color changes
+            colorPicker.addEventListener('input', () => {
+                const rgb = this.hexToRgb(colorPicker.value);
+                redDisplay.textContent = rgb.red;
+                greenDisplay.textContent = rgb.green;
+                blueDisplay.textContent = rgb.blue;
+                console.log(`Color input changed to:`, rgb);
+            });
+            
+            // Execute action when color is selected
+            colorPicker.addEventListener('change', async () => {
+                console.log(`Color picker change event fired!`);
+                const rgb = this.hexToRgb(colorPicker.value);
+                
+                // Add warmWhite and coldWhite with default values
+                const colorData = {
+                    ...rgb,
+                    warmWhite: 0,
+                    coldWhite: 0
+                };
+                
+                if (!action) {
+                    console.error(`Action ${actionName} not found in widget`);
+                    return;
+                }
+                
+                try {
+                    console.log(`Executing color action ${actionName} with color data:`, colorData);
+                    await this.app.hc3ApiManager.executeAction(device, action, colorData);
+                    
+                    // Refresh device state after a short delay
+                    setTimeout(async () => {
+                        const deviceInfo = this.app.deviceIcons.get(device.id);
+                        if (deviceInfo) {
+                            await this.app.hc3ApiManager.updateDeviceIcon(device, deviceInfo.element, deviceInfo.textElement);
+                        }
+                    }, 500);
+                } catch (error) {
+                    console.error(`Failed to execute color action ${actionName}:`, error);
                     alert(`Failed: ${error.message}`);
                 }
             });
@@ -586,5 +657,28 @@ export class DialogManager {
                 document.body.removeChild(modal);
             }
         });
+    }
+    
+    /**
+     * Convert RGB values to hex color
+     */
+    rgbToHex(r, g, b) {
+        const toHex = (n) => {
+            const hex = Math.round(Math.max(0, Math.min(255, n))).toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+        };
+        return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+    
+    /**
+     * Convert hex color to RGB values
+     */
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            red: parseInt(result[1], 16),
+            green: parseInt(result[2], 16),
+            blue: parseInt(result[3], 16)
+        } : { red: 0, green: 0, blue: 0 };
     }
 }

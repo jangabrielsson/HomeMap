@@ -1,0 +1,66 @@
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "gauge",
+    
+    "state": {
+        "value": 0
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "value == event.property ? event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "static",
+            "icon": "gauge"
+        },
+        "subtext": {
+            "template": "${value}%",
+            "visible": "value >= 0"
+        },
+        "svg": {
+            "selector": "g",
+            "style": {
+                "transform": "rotate(${value * 1.8 - 90}deg)"
+            }
+        }
+    },
+    
+    "actions": {
+        "setValue": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/setValue",
+            "body": { "args": ["${value}"] }
+        }
+    },
+    
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "label", "text": "Value" },
+                    { 
+                        "type": "slider", 
+                        "min": 0, 
+                        "max": 100, 
+                        "property": "value", 
+                        "action": "setValue" 
+                    }
+                ]
+            }
+        ]
+    }
+}

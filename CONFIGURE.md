@@ -2,15 +2,39 @@
 
 This guide explains how to configure HomeMap for your home automation system.
 
+**Note**: For detailed widget format documentation, see [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)
+
 ## Table of Contents
 
+- [Quick Start](#quick-start)
 - [Configuration File Structure](#configuration-file-structure)
 - [Floor Plans](#floor-plans)
 - [Devices](#devices)
 - [Widget System](#widget-system)
 - [Icons](#icons)
-- [Actions](#actions)
 - [Examples](#examples)
+
+## Quick Start
+
+1. **Use Settings Panel** (Recommended):
+   - Click the cogwheel (⚙️) button in the app
+   - Configure HC3 host, credentials, and HomeMap data directory
+   - Settings are saved to `.env` file automatically
+
+2. **Or Edit .env Manually**:
+   ```bash
+   HC3_HOST=192.168.1.100
+   HC3_USER=admin
+   HC3_PASSWORD=yourpassword
+   HC3_PROTOCOL=http
+   HC3_HOMEMAP=/path/to/homemapdata
+   ```
+
+3. **Add Devices Visually**:
+   - Enable Edit Mode (toggle at top of app)
+   - Right-click on floor plan to add device
+   - Right-click on device to edit or delete
+   - Drag devices to reposition
 
 ## Configuration File Structure
 
@@ -81,14 +105,18 @@ Each floor requires:
 
 Devices are placed on floors using natural image coordinates.
 
-### Device Definition
+HomeMap supports two device formats:
+
+### Single Floor Format
+
+For devices on only one floor:
 
 ```json
 {
-    "floor_id": "floor1",
     "id": 3630,
     "name": "Living Room Light",
-    "type": "light",
+    "type": "lightdim",
+    "floor_id": "floor1",
     "position": {
         "x": 155,
         "y": 81
@@ -96,384 +124,468 @@ Devices are placed on floors using natural image coordinates.
 }
 ```
 
+### Multi-Floor Format
+
+For devices that appear on multiple floors (e.g., thermostats, security panels):
+
+```json
+{
+    "id": 3630,
+    "name": "Thermostat",
+    "type": "temperature",
+    "floors": [
+        {
+            "floor_id": "floor1",
+            "position": { "x": 155, "y": 81 }
+        },
+        {
+            "floor_id": "floor2",
+            "position": { "x": 200, "y": 90 }
+        }
+    ]
+}
+```
+
+**Note**: HomeMap automatically normalizes formats - if you remove a device from all but one floor, it converts to single-floor format.
+
 ### Device Properties
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
-| `floor_id` | string | Yes | ID of the floor this device is on |
 | `id` | number | Yes | HC3 device ID |
 | `name` | string | Yes | Display name (shown in tooltip) |
 | `type` | string | Yes | Widget type (must match widget definition file) |
-| `position.x` | number | Yes | X coordinate in natural image pixels |
-| `position.y` | number | Yes | Y coordinate in natural image pixels |
+| `floor_id` | string | Conditional* | ID of the floor (single-floor format) |
+| `position` | object | Conditional* | Position {x, y} (single-floor format) |
+| `floors` | array | Conditional* | Array of floor placements (multi-floor format) |
 
-### Positioning Devices
+\* Use either `floor_id`+`position` OR `floors`, not both.
 
-1. **Natural coordinates**: Use the actual pixel coordinates from your source image
-2. **Edit mode**: Enable Edit Mode in the app to drag devices and save positions
-3. **Hover tooltip**: Hover over devices to see their ID and name
+### Managing Devices
+
+**Recommended: Use the Visual UI**
+1. Enable Edit Mode (toggle at top)
+2. Right-click empty space → "Add Device"
+3. Right-click device → "Edit" or "Delete"
+4. Drag devices to reposition
+
+**Manual Editing**:
+1. Get device ID from HC3
+2. Choose appropriate widget type
+3. Position device on floor plan
+4. Save and reload app
 
 ## Widget System
 
 Widgets define how devices are rendered and what actions they support.
 
+**For complete widget format documentation, see [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)**
+
 ### Widget File Location
 
 Widget definitions are JSON files in `homemapdata/widgets/`:
+
+**Available Widgets** (v0.1.5+):
+- `lightdim.json` - Dimmable lights with on/off/dim
 - `light.json` - Simple on/off lights
-- `lightdim.json` - Dimmable lights
-- `binarySwitch.json` - Binary switches
+- `binarySwitch.json` - Toggle switches
+- `doorLock.json` - Lock/unlock controls
 - `temperature.json` - Temperature sensors
 - `motion.json` - Motion sensors
+- `doorSensor.json` - Door sensors
+- `windowSensor.json` - Window sensors
 
-### Widget Structure
+### Widget Version
 
-A widget definition contains:
+All widgets must specify a version (minimum: 0.1.5):
 
 ```json
 {
-    "valuemaps": {...},
-    "status": {...},
+    "widgetVersion": "0.1.5",
+    ...
+}
+```
+
+### Widget Structure (v0.1.5+)
+
+Modern widgets use this structure:
+
+```json
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "lightIcons",
+    "state": {...},
+    "getters": {...},
     "events": {...},
-    "actions": {...}
+    "render": {...},
+    "actions": {...},
+    "ui": {...}
 }
 ```
 
-### Valuemaps
-
-Valuemaps define how device properties are rendered.
-
-#### Icon Valuemap
-
-**Boolean Type** (on/off):
-```json
-"icon": {
-    "property": "value",
-    "type": "boolean",
-    "true": "icons/LightOn.svg",
-    "false": "icons/LightOff.svg"
-}
-```
-
-**Range Type** (numeric ranges):
-```json
-"icon": {
-    "property": "value",
-    "type": "range",
-    "ranges": [
-        { "min": 0, "max": 0, "path": "icons/LightOff.svg" },
-        { "min": 1, "max": 98, "path": "icons/LightHalf.svg" },
-        { "min": 99, "max": 100, "path": "icons/LightFull.svg" }
-    ]
-}
-```
-
-**Static Type** (always same icon):
-```json
-"icon": {
-    "type": "static",
-    "path": "icons/Temperature.svg"
-}
-```
-
-#### Display Valuemap
-
-Display text under the icon:
-
-**Integer**:
-```json
-"display": {
-    "property": "value",
-    "type": "integer",
-    "text": "${value}%"
-}
-```
-
-**Float**:
-```json
-"display": {
-    "property": "value",
-    "type": "float",
-    "text": "${value}°C"
-}
-```
-
-**Epoch Time** (shows "X minutes ago"):
-```json
-"display": {
-    "property": "lastBreached",
-    "type": "epoch",
-    "text": "${value}"
-}
-```
-
-### Status API
-
-Defines which HC3 API to call and which properties to fetch:
+### Quick Example: Light Widget
 
 ```json
-"status": {
-    "api": "/api/devices/${id}",
-    "properties": ["properties.value"],
-    "valuemap": "lightdim"
-}
-```
-
-### Events
-
-Events define how the device updates in real-time:
-
-```json
-"events": {
-    "DevicePropertyUpdatedEvent": {
-        "id": "id",
-        "match": "$..[?(@.id == ${id} && @.property == 'value')]",
-        "valuemap": "lightdim"
-    }
-}
-```
-
-| Property | Description |
-|----------|-------------|
-| `id` | JSONPath to device ID in event |
-| `match` | JSONPath filter to match relevant events |
-| `valuemap` | Which valuemap to use for rendering |
-
-## Actions
-
-Actions define what happens when you click on a device.
-
-### Simple Action (Toggle)
-
-For on/off devices:
-
-```json
-"actions": {
-    "click": {
-        "method": "GET",
-        "api": "/api/devices/${id}/actions/toggle"
-    }
-}
-```
-
-### Slider Action
-
-For devices with adjustable values (like dimmers):
-
-```json
-"actions": {
-    "click": {
-        "type": "slider",
-        "min": 0,
-        "max": 99,
-        "valueProperty": "properties.value",
-        "method": "POST",
-        "api": "/api/devices/${id}/action/setValue",
-        "body": {
-            "args": ["${value}"]
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "lightIcons",
+    
+    "state": {
+        "value": false
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
         }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == false", "icon": "off" },
+                { "when": "value == true", "icon": "on" }
+            ]
+        }
+    },
+    
+    "actions": {
+        "turnOn": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOn"
+        },
+        "turnOff": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOff"
+        }
+    },
+    
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    {
+                        "type": "button",
+                        "label": "On",
+                        "action": "turnOn"
+                    },
+                    {
+                        "type": "button",
+                        "label": "Off",
+                        "action": "turnOff"
+                    }
+                ]
+            }
+        ]
     }
 }
 ```
 
-#### Slider Action Properties
+### Key Sections
 
-| Property | Type | Required | Description |
-|----------|------|----------|-------------|
-| `type` | string | Yes | Set to "slider" to show slider UI |
-| `min` | number | Yes | Minimum slider value |
-| `max` | number | Yes | Maximum slider value |
-| `valueProperty` | string | No | Path to property for current value (default: "properties.value") |
-| `method` | string | Yes | HTTP method (GET, POST, etc.) |
-| `api` | string | Yes | API endpoint (use `${id}` for device ID) |
-| `body` | object | No | Request body (use `${value}` for slider value) |
+- **state**: Default state values
+- **getters**: API calls to fetch device state
+- **events**: Real-time update handling
+- **render**: Icon and text rendering rules
+- **actions**: Available actions (API calls)
+- **ui**: User interface when device is clicked
 
-### Action Placeholders
-
-- `${id}` - Replaced with device ID
-- `${value}` - Replaced with slider value (for slider actions)
+For detailed explanations of each section, see [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md).
 
 ## Icons
 
 Icons are displayed on the floor plan to represent devices.
 
+### Icon Sets (v0.1.5+)
+
+Icons are now organized into **icon sets** - named collections that support multiple formats:
+
+```json
+{
+    "iconSet": "lightIcons",
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == false", "icon": "off" },
+                { "when": "value == true", "icon": "on" }
+            ]
+        }
+    }
+}
+```
+
+Icon files should be in `homemapdata/icons/{iconSetName}/`:
+- `lightIcons/off.svg`
+- `lightIcons/on.svg`
+
+**Supported formats**: SVG, PNG, JPG, JPEG (auto-detected)
+
 ### Icon Guidelines
 
-- **Format**: SVG recommended (also supports PNG, JPG)
-- **Size**: 32x32 pixels (will be scaled automatically)
-- **Location**: Place in `homemapdata/icons/`
-- **Naming**: Use descriptive names (e.g., `LightBulbOn.svg`, `LightBulbOff.svg`)
+- **Format**: SVG recommended (crisp at any size, smaller files)
+- **Size**: 32x32 pixels default (scales automatically)
+- **Location**: `homemapdata/icons/{iconSetName}/{iconName}.{ext}`
+- **Naming**: Use descriptive names matching your render conditions
 
-### Icon Types by Widget
+### Example Icon Sets
 
-Different widgets use different icon patterns:
+**Light Icons**:
+```
+icons/lightIcons/
+  ├── off.svg
+  ├── on.svg
+  └── dim.svg
+```
 
-**Boolean devices** (2 icons):
-- `LightBulbOn.svg`
-- `LightBulbOff.svg`
+**Motion Sensor Icons**:
+```
+icons/motionSensor/
+  ├── safe.svg
+  └── breached.svg
+```
 
-**Range devices** (3+ icons):
-- `LightBulbOff.svg` (0)
-- `LightBulbHalf.svg` (1-98)
-- `LightBulbFull.svg` (99-100)
-
-**Static devices** (1 icon):
-- `TemperatureMeter.svg`
-- `MotionSensor.svg`
+**Door Sensor Icons**:
+```
+icons/doorSensor/
+  ├── closed.svg
+  └── open.svg
+```
 
 ## Examples
 
-### Complete Light Widget
+### Complete Example Configurations
 
+See `homemapdata.example/` for complete working examples with:
+- All 8 widget types
+- Icon sets
+- Floor plan setup
+- Device configurations
+
+### Quick Widget Examples
+
+**Simple Light** (On/Off only):
 ```json
 {
-    "valuemaps": {
-        "light": {
-            "icon": {
-                "property": "value",
-                "type": "boolean",
-                "true": "icons/LightBulbFull.svg",
-                "false": "icons/LightBulbOff.svg"
-            }
+    "widgetVersion": "0.1.5",
+    "iconSet": "lightIcons",
+    "state": { "value": false },
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
         }
     },
-    "status": {
-        "api": "/api/devices/${id}",
-        "properties": ["properties.value"],
-        "valuemap": "light"
-    },
-    "events": {
-        "DevicePropertyUpdatedEvent": {
-            "id": "id",
-            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
-            "valuemap": "light"
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == false", "icon": "off" },
+                { "when": "value == true", "icon": "on" }
+            ]
         }
     },
     "actions": {
-        "click": {
-            "method": "GET",
-            "api": "/api/devices/${id}/actions/toggle"
+        "turnOn": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOn"
+        },
+        "turnOff": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOff"
         }
+    },
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "button", "label": "On", "action": "turnOn" },
+                    { "type": "button", "label": "Off", "action": "turnOff" }
+                ]
+            }
+        ]
     }
 }
 ```
 
-### Complete Dimmer Widget
-
+**Dimmable Light** (On/Off + Slider):
 ```json
 {
-    "valuemaps": {
-        "lightdim": {
-            "icon": {
-                "property": "value",
-                "type": "range",
-                "ranges": [
-                    { "min": 0, "max": 0, "path": "icons/LightBulbOff.svg" },
-                    { "min": 1, "max": 98, "path": "icons/LightBulbHalf.svg" },
-                    { "min": 99, "max": 100, "path": "icons/LightBulbFull.svg" }
-                ]
-            },
-            "display": {
-                "property": "value",
-                "type": "integer",
-                "text": "${value}%"
-            }
+    "widgetVersion": "0.1.5",
+    "iconSet": "lightDimIcons",
+    "state": { "value": 0 },
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
         }
     },
-    "status": {
-        "api": "/api/devices/${id}",
-        "properties": ["properties.value"],
-        "valuemap": "lightdim"
-    },
-    "events": {
-        "DevicePropertyUpdatedEvent": {
-            "id": "id",
-            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
-            "valuemap": "lightdim"
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == 0", "icon": "off" },
+                { "when": "value > 0 && value < 99", "icon": "dim" },
+                { "when": "value >= 99", "icon": "on" }
+            ]
+        },
+        "text": {
+            "template": "${value}%"
         }
     },
     "actions": {
-        "click": {
-            "type": "slider",
-            "min": 0,
-            "max": 99,
-            "valueProperty": "properties.value",
+        "turnOn": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOn"
+        },
+        "turnOff": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOff"
+        },
+        "setValue": {
             "method": "POST",
             "api": "/api/devices/${id}/action/setValue",
-            "body": {
-                "args": ["${value}"]
-            }
+            "body": { "args": ["${value}"] }
         }
+    },
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "button", "label": "On", "action": "turnOn" },
+                    { "type": "button", "label": "Off", "action": "turnOff" }
+                ]
+            },
+            {
+                "elements": [
+                    {
+                        "type": "slider",
+                        "property": "value",
+                        "min": 0,
+                        "max": 99,
+                        "action": "setValue"
+                    }
+                ]
+            }
+        ]
     }
 }
 ```
 
-### Temperature Sensor Widget
-
+**Temperature Sensor** (Read-only):
 ```json
 {
-    "valuemaps": {
-        "temperature": {
-            "icon": {
-                "type": "static",
-                "path": "icons/TemperatureMeter.svg"
-            },
-            "display": {
-                "property": "value",
-                "type": "float",
-                "text": "${value}°C"
-            }
+    "widgetVersion": "0.1.5",
+    "iconSet": "temperature",
+    "state": { "value": 20.0 },
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
         }
     },
-    "status": {
-        "api": "/api/devices/${id}",
-        "properties": ["properties.value"],
-        "valuemap": "temperature"
-    },
-    "events": {
-        "DevicePropertyUpdatedEvent": {
-            "id": "id",
-            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
-            "valuemap": "temperature"
+    "render": {
+        "icon": {
+            "type": "static",
+            "icon": "thermometer"
+        },
+        "text": {
+            "template": "${value}°C"
         }
     }
 }
 ```
+
+For more examples, see:
+- `homemapdata.example/widgets/` - All 8 widget types
+- `docs/WIDGET_FORMAT.md` - Complete format documentation
 
 ## Tips and Best Practices
 
-1. **Start with Edit Mode**: Use Edit Mode to position devices visually, then fine-tune in config.json if needed
+1. **Use Visual UI**: Enable Edit Mode to add, edit, and position devices without manual JSON editing
 
-2. **Use Descriptive Names**: Device names appear in tooltips - make them clear and unique
+2. **Start with Settings Panel**: Use the cogwheel (⚙️) to configure HC3 connection instead of editing .env
 
-3. **Organize Icons**: Group related icons with consistent naming (e.g., `Light_On.svg`, `Light_Off.svg`)
+3. **Use Example Widgets**: Copy from `homemapdata.example/widgets/` and modify for your needs
 
-4. **Test Incrementally**: Add one device at a time to verify widget definitions work correctly
+4. **Icon Sets**: Organize icons into sets by device type for better management
 
-5. **Check Console**: Use DevTools (Cmd+Shift+I) to see event processing and debug issues
+5. **Test Incrementally**: Add one device at a time to verify everything works
 
-6. **Backup Config**: Keep backups of your config.json when making major changes
+6. **Check Console**: Use DevTools (Cmd+Shift+I or menu) to debug event processing
 
-7. **Reuse Widgets**: Create widget definitions that can be reused across similar devices
+7. **Backup Config**: Keep backups before major changes
 
-8. **SVG Icons**: Use SVG for crisp icons at any size and smaller file sizes
+8. **Multi-Floor Devices**: HomeMap automatically handles format conversion - add/remove floors via Edit dialog
+
+9. **Widget Versioning**: Always set `widgetVersion: "0.1.5"` or higher for new widgets
+
+10. **Property-Specific APIs**: Use `/api/devices/${id}/properties/{property}` for better performance
 
 ## Troubleshooting
 
 **Device not showing**:
 - Check device ID matches HC3
 - Verify widget type exists in `widgets/` folder
-- Check floor_id matches a floor definition
+- Check `floor_id` matches a floor definition
+- Look for version compatibility errors in console
 
 **Icon not appearing**:
-- Verify icon path is correct
-- Check icon file exists in `homemapdata/icons/`
-- Look for errors in console (DevTools)
+- Verify icon set name and icon name match
+- Check files exist: `homemapdata/icons/{iconSet}/{iconName}.{ext}`
+- Look for loading errors in console
+- Ensure widget has `iconSet` property
 
 **Action not working**:
-- Check HC3 API endpoint is correct
-- Verify device supports the action
+- Check HC3 API endpoint is correct in widget actions
+- Verify device supports the action in HC3
 - Check console for HTTP errors
+- Ensure `body` format matches HC3 expectations
+
+**Events not updating**:
+- Check event `match` pattern includes property filter
+- Verify `updates` map is correct
+- Look for event dispatch logs in console
+- Ensure widget version is 0.1.5+
+
+**Widget version errors**:
+- Update `widgetVersion` to "0.1.5" or higher
+- Convert old valuemaps format to new state/getters/render format
+- See `docs/WIDGET_FORMAT.md` for migration guide
+
+**Can't edit devices**:
+- Enable Edit Mode (toggle at top of window)
+- Right-click device for Edit/Delete
+- Right-click empty space to Add Device
+
+## Migration from v0.1.4
+
+If you have widgets in the old format (with valuemaps), see:
+- `docs/WIDGET_FORMAT.md` - Complete new format
+- `homemapdata.example/` - Working examples of all widget types
+- Migration involves converting `valuemaps` → `state`/`getters`/`render`/`actions`/`ui`
+
+## Additional Resources
+
+- **Widget Format**: [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md) - Complete widget specification
+- **Multi-Floor Devices**: [docs/MULTI_FLOOR_DEVICES.md](docs/MULTI_FLOOR_DEVICES.md) - Multi-floor support details
+- **Examples**: `homemapdata.example/` - Complete working configuration
+- **Changelog**: [CHANGELOG.md](CHANGELOG.md) - Version history and changes
 
 **Position wrong after edit**:
 - Verify floor width/height match actual image dimensions

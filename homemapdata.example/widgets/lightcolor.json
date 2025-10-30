@@ -1,0 +1,119 @@
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "dimLight",
+    
+    "state": {
+        "value": 0,
+        "colorComponents": {
+            "red": 0,
+            "green": 0,
+            "blue": 0,
+            "warmWhite": 0,
+            "coldWhite": 0
+        }
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        },
+        "colorComponents": {
+            "api": "/api/devices/${id}/properties/colorComponents",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && (@.property == 'value' || @.property == 'colorComponents' || @.property == 'color'))]",
+            "updates": {
+                "value": "value == event.property ? event.newValue",
+                "colorComponents": "(colorComponents == event.property || color == event.property) ? event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == 0", "icon": "off" },
+                { "when": "value < 99", "icon": "half" },
+                { "when": "value >= 99", "icon": "on" }
+            ]
+        },
+        "subtext": {
+            "template": "${value}%",
+            "visible": "value > 0"
+        },
+        "style": {
+            "filter": "drop-shadow(0 0 6px rgb(${colorComponents.red}, ${colorComponents.green}, ${colorComponents.blue}))"
+        }
+    },
+    
+    "actions": {
+        "turnOn": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOn",
+            "body": { "args": [] }
+        },
+        "turnOff": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOff",
+            "body": { "args": [] }
+        },
+        "setValue": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/setValue",
+            "body": { "args": ["${value}"] }
+        },
+        "setColor": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/setColor",
+            "body": { 
+                "args": [
+                    "${red}",
+                    "${green}",
+                    "${blue}",
+                    "${warmWhite}",
+                    "${coldWhite}"
+                ]
+            }
+        }
+    },
+    
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "button", "label": "On", "action": "turnOn" },
+                    { "type": "button", "label": "Off", "action": "turnOff" }
+                ]
+            },
+            {
+                "elements": [
+                    { "type": "label", "text": "Dim" },
+                    { 
+                        "type": "slider", 
+                        "min": 0, 
+                        "max": 99, 
+                        "property": "value", 
+                        "action": "setValue" 
+                    }
+                ]
+            },
+            {
+                "elements": [
+                    {
+                        "type": "colorSelect",
+                        "label": "Color",
+                        "property": "colorComponents",
+                        "action": "setColor"
+                    }
+                ]
+            }
+        ]
+    }
+}
