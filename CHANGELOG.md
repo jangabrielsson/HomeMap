@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2025-10-30
+
+### Added
+- **Authentication Protection System**:
+  - Tracks failed authentication attempts (401/403 responses)
+  - Automatically locks API calls after 2 consecutive failures
+  - Prevents HC3 account lockout (HC3 locks after 4 attempts)
+  - Shows clear error dialog when auth fails
+  - Stops event polling immediately on auth lock
+  - Status indicator shows "Authentication Failed - Check Credentials"
+  - Auto-reset when credentials are updated in Settings
+- **Widget Package System Documentation**:
+  - `CREATE_WIDGET_PACKAGE.md` - Comprehensive guide for creating .hwp packages
+  - Step-by-step manual creation instructions for non-technical users
+  - Package structure specification
+  - Manifest format reference with complete field documentation
+  - Testing and distribution guidelines
+  - Troubleshooting section with common issues
+- **Package Export Script** (`scripts/create-package.sh`):
+  - Export installed packages as .hwp files
+  - Lists available packages in homemapdata
+  - Extracts package metadata from manifest
+  - Creates properly named archives: `package-id-version.hwp`
+  - Includes widgets, icons, README, and screenshots
+  - Shows package contents summary after creation
+- **Device Dialog Enhancements**:
+  - Shows all installed package widgets in add/edit device dialogs
+  - "Available from Packages" section lists unloaded package widgets
+  - Consistent display format showing package IDs
+  - Saves package reference with device configuration
+
+### Changed
+- **Package Manager Integration**:
+  - Widget selection now includes all installed packages, not just loaded ones
+  - Package widgets display with format: "widget-id (package-id)"
+  - Device widget field stores package reference: "package-id/widget-id"
+
+### Fixed
+- **Authentication Failure Handling**:
+  - `testConnection()` checks auth lock before attempting connection
+  - `executeAction()` checks auth lock and handles 401/403 responses
+  - `updateDeviceIcon()` silently skips updates when auth locked
+  - Event polling checks auth lock at start of each cycle
+  - All HC3 API calls detect and handle authentication failures
+- **Package Installation**:
+  - Switched to non-blocking Tauri dialogs for reinstall confirmation
+  - Proper widget reload after package operations
+
+### Security
+- Auth failure counter prevents repeated failed login attempts
+- Protects users from accidentally triggering HC3 account lockouts
+- Safe margin of 2 attempts below HC3's 4-attempt limit
+
+### Documentation
+- `docs/AUTH_PROTECTION.md` - Complete authentication protection documentation
+- `docs/CREATE_WIDGET_PACKAGE.md` - Widget package creation guide
+
 ## [0.1.7] - 2025-10-30
 
 ### Added
