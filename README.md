@@ -151,6 +151,7 @@ cargo tauri build
 Comprehensive guides are available in the [`docs/`](docs/) directory:
 
 - **[CONFIGURE.md](CONFIGURE.md)** - Complete configuration guide (widgets, icons, actions, floor plans)
+- **[docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)** - Widget JSON format specification and examples
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development setup guide
 - **[docs/DEV_GUIDE.md](docs/DEV_GUIDE.md)** - Development patterns and best practices

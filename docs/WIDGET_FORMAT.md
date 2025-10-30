@@ -111,7 +111,31 @@ Maps HC3 events to state updates.
 - `match`: JSONPath expression to filter events
 - `updates`: Map of state properties to update
   - Keys are state property names
-  - Values are JSONPath expressions to extract from event
+  - Values are JSONPath expressions or conditional expressions to extract from event
+
+**Conditional Updates (v0.1.7+):**
+
+Apply updates only when specific conditions are met:
+
+```json
+{
+  "events": {
+    "DevicePropertyUpdatedEvent": {
+      "match": "$..[?(@.id == ${id} && (@.property == 'value' || @.property == 'colorComponents'))]",
+      "updates": {
+        "value": "value == event.property ? event.newValue",
+        "colorComponents": "colorComponents == event.property ? event.newValue"
+      }
+    }
+  }
+}
+```
+
+The format is: `"propertyName == event.property ? valuePath"`
+- Only updates the state property if the event's property matches
+- Supports OR conditions: `(prop1 == event.property || prop2 == event.property) ? event.newValue`
+
+This allows multiple properties to be tracked with different update rules in a single event definition.
 
 ### 4. render (required)
 Defines how to render the device icon and text.
@@ -158,6 +182,44 @@ Defines how to render the device icon and text.
 - `template`: String template with ${property} placeholders
 - `visible`: Expression to determine visibility (optional)
 
+**Dynamic Styles (v0.1.7+):**
+
+Apply CSS styles dynamically based on state:
+
+```json
+{
+  "render": {
+    "icon": { "type": "static", "icon": "light" },
+    "style": {
+      "filter": "drop-shadow(0 0 6px rgb(${colorComponents.red}, ${colorComponents.green}, ${colorComponents.blue}))",
+      "transform": "rotate(${value * 1.8}deg)"
+    }
+  }
+}
+```
+
+Supports all CSS properties and expressions in templates.
+
+**SVG Manipulation (v0.1.7+):**
+
+For SVG icons, apply styles to internal elements:
+
+```json
+{
+  "render": {
+    "icon": { "type": "static", "icon": "gauge" },
+    "svg": {
+      "selector": "g",
+      "style": {
+        "transform": "rotate(${value * 1.8 - 90}deg)"
+      }
+    }
+  }
+}
+```
+
+This loads the SVG inline and applies styles to elements matching the CSS selector, allowing you to rotate needles, change colors, etc. without rotating the entire icon.
+
 ### 5. actions (optional)
 Defines API calls to control the device.
 
@@ -177,6 +239,32 @@ Defines API calls to control the device.
 - `method`: HTTP method (GET, POST, PUT, etc.)
 - `api`: API endpoint (can use ${id} placeholder)
 - `body`: Request body (can use ${value} or other placeholders)
+
+**Object Parameters (v0.1.7+):**
+
+Actions can accept object parameters for complex data:
+
+```json
+{
+  "actions": {
+    "setColor": {
+      "method": "POST",
+      "api": "/api/devices/${id}/action/setColor",
+      "body": {
+        "args": [
+          "${red}",
+          "${green}",
+          "${blue}",
+          "${warmWhite}",
+          "${coldWhite}"
+        ]
+      }
+    }
+  }
+}
+```
+
+When executed with an object like `{red: 255, green: 0, blue: 0, warmWhite: 0, coldWhite: 0}`, all placeholders are replaced with the corresponding values.
 
 ### 6. ui (optional)
 Defines interactive UI controls for the device. **Widgets without UI do nothing when clicked.**
@@ -243,6 +331,90 @@ Defines interactive UI controls for the device. **Widgets without UI do nothing 
 
 - `toggle`: On/off toggle (future)
 - No UI: Widget is read-only, clicking does nothing
+
+**Composable UI (v0.1.5+):**
+
+Create complex UI with multiple rows and elements:
+
+```json
+{
+  "ui": {
+    "rows": [
+      {
+        "elements": [
+          { "type": "button", "label": "On", "action": "turnOn" },
+          { "type": "button", "label": "Off", "action": "turnOff" }
+        ]
+      },
+      {
+        "elements": [
+          { "type": "label", "text": "Brightness" },
+          { "type": "slider", "min": 0, "max": 99, "property": "value", "action": "setValue" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Element Types:**
+
+- `button`: Action button
+  - `label`: Button text
+  - `action`: Action to call
+  
+- `label`: Text label
+  - `text`: Label text
+  
+- `slider`: Value slider
+  - `min`: Minimum value
+  - `max`: Maximum value
+  - `property`: State property to bind
+  - `action`: Action to call on change
+
+- `colorSelect` (v0.1.7+): Color picker
+  - `label`: Label text
+  - `property`: State property (should be colorComponents object)
+  - `action`: Action to call on color change
+  
+  ```json
+  {
+    "type": "colorSelect",
+    "label": "Color",
+    "property": "colorComponents",
+    "action": "setColor"
+  }
+  ```
+  
+  Displays an HTML5 color picker with live RGB values. Passes `{red, green, blue, warmWhite: 0, coldWhite: 0}` to the action.
+
+## Template Expressions
+
+**v0.1.7+** supports expressions in template strings:
+
+**Simple Properties:**
+```
+"${value}"  → state.value
+"${colorComponents.red}"  → state.colorComponents.red
+```
+
+**Mathematical Expressions:**
+```
+"${value * 1.8}"  → 50 * 1.8 = 90
+"${value / 10 + 5}"  → (50 / 10) + 5 = 10
+"${value * 1.8 - 90}"  → (50 * 1.8) - 90 = 0
+```
+
+**Conditional Expressions:**
+```
+"${value > 50 ? 100 : 0}"  → if value > 50 then 100 else 0
+"${value == 0 ? 'off' : 'on'}"  → ternary with strings
+```
+
+Works in:
+- Render templates: `"template": "${value}%"`
+- Style values: `"transform": "rotate(${value * 1.8}deg)"`
+- Action parameters: `"args": ["${value * 10}"]`
 
 ## Complete Example
 
@@ -547,6 +719,54 @@ Dimmable light with slider control:
   }
 }
 ```
+
+### Gauge Widget Example (v0.1.7+)
+
+Complete gauge widget showing expression evaluation and SVG manipulation:
+
+```json
+{
+  "id": "gauge",
+  "name": "Gauge Widget",
+  "description": "Visual gauge with rotating needle",
+  "version": "1.0.0",
+  "minEventLoggerVersion": "0.1.7",
+
+  "type": "com.fibaro.multilevelSensor",
+  
+  "state": {
+    "value": 0
+  },
+  
+  "events": {
+    "value": {
+      "match": "$[?(@.property=='value')]",
+      "update": "newValue"
+    }
+  },
+  
+  "render": {
+    "icon": {
+      "set": "gauge",
+      "template": "gauge"
+    },
+    "badge": {
+      "template": "${value}",
+      "visible": "value > 0"
+    },
+    "style": {
+      "g": "transform: rotate(${value * 1.8 - 90}deg); transform-origin: 32px 50px;"
+    }
+  }
+}
+```
+
+**Key Features Demonstrated:**
+- **Expression Evaluation**: `${value * 1.8 - 90}` converts 0-100 range to -90° to 90° rotation
+- **SVG Manipulation**: `"g": "..."` targets internal `<g>` element in gauge.svg
+- **Transform Origin**: Proper rotation pivot point for needle animation
+- **Mathematical Templates**: Arithmetic operations in template expressions
+
 ```
 
 ## Future Enhancements (Phase 2)

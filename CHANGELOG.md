@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2025-10-30
+
+### Added
+- **Color Light Widget** (`lightcolor.json`):
+  - Multi-property state tracking (brightness + RGB color components)
+  - Dynamic colored glow effect using CSS drop-shadow with actual RGB values
+  - Color picker UI element with hex input and RGB display
+  - `setColor` action to change light colors
+  - Handles both `colorComponents` (object) and `color` (string) events from HC3
+  - Automatic color string parsing ("R,G,B,WW,CW" format)
+- **Gauge Widget** (`gauge.json`):
+  - Visual gauge with rotating needle indicator (0-100 range)
+  - Inline SVG manipulation to rotate needle independently from background
+  - Colored arc segments (green/yellow/red) for visual feedback
+  - Expression-based rotation: `${value * 1.8 - 90}`
+- **Color Select UI Element**:
+  - New `colorSelect` element type for widget dialogs
+  - HTML5 color picker with live RGB value display
+  - Hex ↔ RGB conversion utilities
+  - Styled with custom CSS for consistent appearance
+- **Expression Evaluation in Templates**:
+  - Support for mathematical expressions: `${value * 1.8}`, `${value / 10 + 5}`
+  - Support for conditional expressions: `${value > 50 ? 100 : 0}`
+  - Property references automatically replaced with state values
+  - Works in style templates, text templates, and action parameters
+
+### Changed
+- **Enhanced Event System**:
+  - OR conditions in conditional updates: `(prop1 == event.property || prop2 == event.property) ? event.newValue`
+  - Smarter event filtering checks both state properties and update expressions
+  - Automatic color string parsing when updating colorComponents
+- **Widget Manager Improvements**:
+  - Nested property interpolation: `${colorComponents.red}`
+  - Dynamic style rendering on icon elements
+  - Inline SVG loading and manipulation for advanced styling
+  - SVG-specific style application to internal elements via selector
+- **Dialog Manager**:
+  - Added `rgbToHex()` and `hexToRgb()` helper methods
+  - Color picker event handlers with automatic RGB extraction
+- **HC3 API Manager**:
+  - Object-based action parameters (e.g., `{red: 255, green: 0, blue: 0}`)
+  - Template variable replacement for object properties
+  - Color string parsing for colorComponents properties
+
+### Technical Details
+- New Rust command: `read_file_as_text` for SVG source loading
+- SVG manipulation using DOMParser and XMLSerializer
+- Expression evaluation with property substitution in interpolateTemplate
+- Enhanced widget render system with `svg` section for internal element styling
+- Color component normalization (string → object conversion)
+
 ## [0.1.6] - 2025-10-30
 
 ### Changed
