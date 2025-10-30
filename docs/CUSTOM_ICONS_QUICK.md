@@ -1,5 +1,7 @@
 # Custom Icons - Quick Reference
 
+**✨ New in v0.1.16**: Icon set selection now uses a dropdown with auto-discovery!
+
 ## 🎨 What It Does
 
 Use your own icon designs with any built-in widget - no need to copy or edit widget files!
@@ -17,8 +19,14 @@ Place SVG or PNG files matching widget expectations:
 - Door sensor: `open.svg`, `closed.svg`
 - Motion: `active.svg`, `inactive.svg`
 
-### 3. Use in Device
-**Via UI:** Edit device → "Custom Icon Set" field → enter `myCustomIcons`
+### 3. Select in Device
+**Via UI (v0.1.16+):**
+1. Add or Edit device
+2. Use **Custom Icon Set** dropdown
+3. Select your icon set from the list (organized by location)
+4. Save
+
+**No typing needed!** Dropdown shows all available icon sets automatically.
 
 **Via config.json:**
 ```json
@@ -30,6 +38,25 @@ Place SVG or PNG files matching widget expectations:
     "iconSet": "myCustomIcons"
   }
 }
+```
+
+## 📂 Icon Set Organization (v0.1.16+)
+
+Dropdown automatically discovers and groups icon sets:
+
+```
+Built-in          <- homemapdata/icons/built-in/
+├── dimLight
+├── doorSensor
+└── motion
+
+User              <- homemapdata/icons/
+├── myCustomIcons
+├── vintageTheme
+└── modernLights
+
+Package: pkg-name <- homemapdata/icons/packages/pkg-name/
+└── customIcons
 ```
 
 ## 💡 Common Use Cases
@@ -95,16 +122,29 @@ cp -r docs/examples/custom-icons/exampleCustomLight ~/Documents/homemapdata/icon
 
 ## ❓ Troubleshooting
 
-**Icons not showing?**
-1. Check folder name matches exactly (case-sensitive)
+**Icon set not in dropdown?**
+1. Check folder is in `homemapdata/icons/{yourSetName}/`
+2. Restart app to refresh discovery
+3. Check DevTools (Cmd+Shift+I) → Console for logs
+
+**Icons not showing on device?**
+1. Verify icon set selected in Edit Device dialog
 2. Check icon file names match widget expectations
-3. Open DevTools (Cmd+Shift+I) → Console for errors
-4. Restart app to reload icon cache
+3. Check file format (SVG or PNG only)
+4. Open DevTools → Console for errors
 
 **Wrong icons?**
-1. Verify path: `homemapdata/icons/{yourSetName}/`
-2. Check JSON syntax in config.json
-3. Clear and re-enter icon set name in Edit dialog
+1. Edit device → verify Custom Icon Set dropdown selection
+2. Select "Use widget default icons" to reset
+3. Restart app to clear cache
+
+## 🎯 Benefits (v0.1.16+)
+
+✅ **No typing** - select from dropdown  
+✅ **No typos** - only valid sets shown  
+✅ **Visual discovery** - see all available options  
+✅ **Organized** - grouped by location  
+✅ **Fast setup** - no manual path entry  
 
 ## 🚀 Coming Soon
 

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.16] - 2025-10-30
+
+### Added
+- **Icon Set Dropdown**: Custom Icon Set field now uses dropdown instead of text input
+  - Auto-discovers all available icon sets from built-in, user, and package folders
+  - Organized by location (Built-in, User, Package)
+  - Prevents typos and shows what's available
+  - Default option: "Use widget default icons"
+- **Enhanced Icon Discovery**: Improved icon set scanning across all locations
+
+### Changed
+- **list_directory Command**: Now returns both files and directories (directories with trailing `/`)
+  - Enables proper discovery of icon set folders
+  - Backward compatible with existing file listings
+
+### Fixed
+- **Edit Device Dialog**: Fixed duplicate text that caused buttons to appear outside dialog
+- **Dialog Closing**: Edit Device dialog now properly closes after saving
+- **Error Handling**: Added proper error handling with try-catch in save handlers
+- **Missing Import**: Fixed `normalizeDeviceFormat` import in dialogManager
+
+### Improved
+- **User Experience**: Much easier to select custom icon sets - no typing, no typos
+- **Visual Feedback**: Icon sets grouped by location for clarity
+- **Debug Logging**: Added comprehensive logging for icon set discovery
+
 ## [0.1.15] - 2025-10-30
 
 ### Added

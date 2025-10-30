@@ -4,7 +4,11 @@
 
 Implemented device-level parameter support that allows users to customize widget behavior without modifying widget definitions. The primary use case is custom icon sets, but the architecture supports any future parameter types.
 
-## Implementation Details
+**Version History:**
+- **v0.1.15**: Initial implementation with text input field
+- **v0.1.16**: Enhanced with dropdown selection and auto-discovery
+
+## Implementation Details (v0.1.16)
 
 ### 1. Data Model
 
@@ -52,13 +56,36 @@ async renderDevice(device, widget, iconElement, textElement) {
 
 ### 3. Add Device Dialog (dialogManager.js)
 
-Added UI field for custom icon set:
+**v0.1.16**: Changed from text input to dropdown with auto-discovery:
 
+```javascript
+// Discover available icon sets
+const iconSets = await this.discoverIconSets();
+let iconSetOptions = '<option value="">Use widget default icons</option>';
+if (iconSets.length > 0) {
+    const grouped = {};
+    iconSets.forEach(set => {
+        if (!grouped[set.location]) grouped[set.location] = [];
+        grouped[set.location].push(set);
+    });
+    
+    for (const [location, sets] of Object.entries(grouped)) {
+        iconSetOptions += `<optgroup label="${location}">`;
+        sets.forEach(set => {
+            iconSetOptions += `<option value="${set.name}">${set.name}</option>`;
+        });
+        iconSetOptions += '</optgroup>';
+    }
+}
+```
+
+**UI field:**
 ```html
 <div class="form-group">
     <label>Custom Icon Set <span style="color: #888;">(Optional)</span></label>
-    <input type="text" id="addDeviceIconSet" class="form-input" 
-           placeholder="e.g., myCustomIcons">
+    <select id="addDeviceIconSet" class="form-input">
+        ${iconSetOptions}
+    </select>
     <small style="color: #888;">
         Override the widget's default icons with your own icon set
     </small>
@@ -67,9 +94,8 @@ Added UI field for custom icon set:
 
 **Save logic:**
 ```javascript
-const customIconSet = iconSetInput.value.trim();
+const customIconSet = iconSetSelect.value; // Get from dropdown
 
-// Add custom parameters if specified
 if (customIconSet) {
     device.params = {
         iconSet: customIconSet
@@ -77,14 +103,56 @@ if (customIconSet) {
 }
 ```
 
+### 3a. Icon Set Discovery (dialogManager.js)
+
+**v0.1.16**: New method to discover available icon sets:
+
+```javascript
+async discoverIconSets() {
+    const iconSets = [];
+    const dataPath = this.app.dataPath;
+    
+    // Check built-in icons (icons/built-in/)
+    const builtInDirs = await this.app.invoke('list_directory', { 
+        path: `${dataPath}/icons/built-in` 
+    });
+    builtInDirs.forEach(dir => {
+        if (dir.endsWith('/')) {
+            iconSets.push({ 
+                name: dir.slice(0, -1), 
+                location: 'built-in' 
+            });
+        }
+    });
+    
+    // Check user icons (icons/)
+    const iconDirs = await this.app.invoke('list_directory', { 
+        path: `${dataPath}/icons` 
+    });
+    iconDirs.forEach(dir => {
+        if (dir.endsWith('/') && dir !== 'built-in/' && dir !== 'packages/') {
+            iconSets.push({ 
+                name: dir.slice(0, -1), 
+                location: 'user' 
+            });
+        }
+    });
+    
+    // Check package icons (icons/packages/{pkg}/)
+    // ... similar pattern for packages
+    
+    return iconSets;
+}
+```
+
 ### 4. Edit Device Dialog (dialogManager.js)
 
-Added similar UI field with pre-populated value:
+**v0.1.16**: Same dropdown approach with pre-selected current value:
 
 ```html
-<input type="text" id="editDeviceIconSet" 
-       value="${device.params?.iconSet || ''}" 
-       placeholder="e.g., myCustomIcons">
+<select id="editDeviceIconSet" class="form-input">
+    ${iconSetOptions} <!-- Pre-selects current device.params.iconSet -->
+</select>
 ```
 
 **Save logic with cleanup:**
@@ -110,27 +178,68 @@ if (customIconSet) {
 
 Uses existing `loadIconSet(iconSetName, packageId)` method which searches:
 
-1. Package-specific: `homemapdata/icons/packages/{packageId}/{iconSetName}/`
-2. Built-in: `homemapdata/icons/built-in/{iconSetName}/`
-3. User: `homemapdata/icons/{iconSetName}/`
+1. Built-in: `homemapdata/icons/built-in/{iconSetName}/`
+2. User: `homemapdata/icons/{iconSetName}/`
+3. Package: `homemapdata/icons/packages/{packageId}/{iconSetName}/`
 
-For custom icons, users place files in #3 (user icons folder).
+For custom icons, users place files in #2 (user icons folder).
+
+### 6. Backend Support (lib.rs)
+
+**v0.1.16**: Modified `list_directory` command to return directories:
+
+```rust
+#[tauri::command]
+fn list_directory(path: String) -> Result<Vec<String>, String> {
+    // ... path validation ...
+    
+    let entries = fs::read_dir(&path_buf)?;
+    let mut items = Vec::new();
+    
+    for entry in entries {
+        let entry = entry?;
+        let file_name = entry.file_name();
+        if let Some(name) = file_name.to_str() {
+            let path = entry.path();
+            if path.is_dir() {
+                // Add trailing slash for directories
+                items.push(format!("{}/", name));
+            } else if path.is_file() {
+                // Regular file
+                items.push(name.to_string());
+            }
+        }
+    }
+    
+    Ok(items)
+}
+```
+
+**Key change**: Now returns both files and directories (directories with trailing `/`), enabling icon set discovery.
 
 ## Usage Workflow
 
-### Via UI (Recommended)
+### Via UI (Recommended - v0.1.16)
 
 **Adding New Device:**
 1. Click "Add Device" on floor plan
 2. Fill Device ID, Name, Type
-3. Enter custom icon set name in "Custom Icon Set" field
+3. **Select** custom icon set from dropdown (auto-discovered)
+   - Organized by location: Built-in, User, Package
+   - Default option: "Use widget default icons"
 4. Click "Add Device"
 
 **Editing Existing Device:**
 1. Right-click device → "Edit"
-2. Enter icon set name in "Custom Icon Set" field
+2. **Select** icon set from dropdown (current selection pre-selected)
 3. Click "Save"
 4. Device immediately uses new icons
+
+**Benefits:**
+- ✅ No typing - select from available options
+- ✅ No typos - only valid icon sets shown
+- ✅ Visual organization by location
+- ✅ See all available icon sets at once
 
 ### Via Manual Editing
 
@@ -249,32 +358,29 @@ Created comprehensive documentation:
 
 ## Files Modified
 
-1. **src/modules/widgetManager.js**
-   - Modified `renderDevice()` to check `device.params.iconSet`
-   - Load custom icon set if specified
-   - Fall back to widget default if not
+**v0.1.15:**
+1. **src/modules/widgetManager.js** - Device params rendering
+2. **src/modules/dialogManager.js** - Text input UI fields  
+3. **README.md** - Feature overview
+4. **docs/CUSTOM_ICONS.md** - User guide
+5. **docs/examples/CUSTOM_ICON_EXAMPLE.md** - Tutorial
 
-2. **src/modules/dialogManager.js**
-   - Added UI field in Add Device dialog
-   - Added UI field in Edit Device dialog
-   - Save/load `params.iconSet` from config
-
-3. **README.md**
-   - Added Custom Icons section
-   - Added link to CUSTOM_ICONS.md
-
-4. **docs/CUSTOM_ICONS.md** (NEW)
-   - Complete user guide
-   - Examples and use cases
-   - Troubleshooting
-
-5. **docs/examples/CUSTOM_ICON_EXAMPLE.md** (NEW)
-   - Working example with SVG code
-   - Step-by-step tutorial
+**v0.1.16:**
+1. **src/modules/dialogManager.js** - Dropdown UI + discovery
+   - Added `discoverIconSets()` method
+   - Changed text input to select dropdown
+   - Added grouped optgroup organization
+2. **src-tauri/src/lib.rs** - Backend directory listing
+   - Modified `list_directory` to return directories with `/`
+   - Enables icon set folder discovery
+3. **docs/CUSTOM_ICONS.md** - Updated with dropdown usage
+4. **docs/CUSTOM_ICONS_QUICK.md** - Updated quick reference
+5. **docs/DEVICE_PARAMS_IMPL.md** - Updated implementation notes
 
 ## Version
 
-Feature added in: **v0.1.15** (planned)
+- **v0.1.15**: Initial implementation with text input
+- **v0.1.16**: Enhanced with dropdown and auto-discovery
 
 ## Related Issues
 
