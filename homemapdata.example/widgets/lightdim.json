@@ -1,48 +1,81 @@
 {
-    "valuemaps": {
-        "lightdim": {
-            "icon": {
-                "property": "value",
-                "type": "range",
-                "ranges": [
-                    { "min": 0, "max": 0, "path": "icons/LightBulbOff.svg" },
-                    { "min": 1, "max": 98, "path": "icons/LightBulbHalf.svg" },
-                    { "min": 99, "max": 100, "path": "icons/LightBulbFull.svg" }
-                ]
-            },
-            "display": {
-                "property": "value",
-                "type": "integer",
-                "text": "${value}%"
+    "widgetVersion": "0.1.5",
+    "iconSet": "dimLight",
+    
+    "state": {
+        "value": 0
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "event.newValue"
             }
         }
     },
     
-    "status": {
-        "api": "/api/devices/${id}",
-        "properties": ["properties.value"],
-        "valuemap": "lightdim"
-    },
-
-    "events": {
-        "DevicePropertyUpdatedEvent": {
-            "id": "id",
-            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
-            "valuemap": "lightdim"
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == 0", "icon": "off" },
+                { "when": "value < 99", "icon": "half" },
+                { "when": "value >= 99", "icon": "on" }
+            ]
+        },
+        "subtext": {
+            "template": "${value}%",
+            "visible": "value > 0"
         }
     },
-
+    
     "actions": {
-        "click": {
-            "type": "slider",
-            "min": 0,
-            "max": 99,
-            "valueProperty": "properties.value",
+        "turnOn": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOn",
+            "body": { "args": [] }
+        },
+        "turnOff": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/turnOff",
+            "body": { "args": [] }
+        },
+        "setValue": {
             "method": "POST",
             "api": "/api/devices/${id}/action/setValue",
-            "body": {
-                "args": ["${value}"]
-            }
+            "body": { "args": ["${value}"] }
         }
+    },
+    
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "button", "label": "On", "action": "turnOn" },
+                    { "type": "button", "label": "Off", "action": "turnOff" }
+                ]
+            },
+            {
+                "elements": [
+                    { "type": "label", "text": "Dim" },
+                    { 
+                        "type": "slider", 
+                        "min": 0, 
+                        "max": 99, 
+                        "property": "value", 
+                        "action": "setValue" 
+                    }
+                ]
+            }
+        ]
     }
 }

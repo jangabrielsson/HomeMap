@@ -1,30 +1,34 @@
 {
-    "valuemaps": {
-        "temperature": {
-            "icon": {
-                "property": "value",
-                "type": "static",
-                "path": "icons/TemperatureMeter.svg"
-            },
-            "display": {
-                "property": "value",
-                "type": "float",
-                "text": "${value}°"
+    "widgetVersion": "0.1.5",
+    "iconSet": "Temperature",
+    
+    "state": {
+        "value": 0
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "event.newValue"
             }
         }
     },
     
-    "status": {
-        "api": "/api/devices/${id}",
-        "properties": ["properties.value"],
-        "valuemap": "temperature"
-    },
-
-    "events": {
-        "DevicePropertyUpdatedEvent": {
-            "id": "id",
-            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
-            "valuemap": "temperature"
+    "render": {
+        "icon": {
+            "type": "static",
+            "icon": "icon"
+        },
+        "subtext": {
+            "template": "${value}°"
         }
     }
 }

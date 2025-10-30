@@ -1,6 +1,6 @@
 {
     "widgetVersion": "0.1.5",
-    "iconSet": "motionSensor",
+    "iconSet": "windowSensor",
     
     "state": {
         "value": false
@@ -27,8 +27,8 @@
             "type": "conditional",
             "property": "value",
             "conditions": [
-                { "when": "value == false", "icon": "safe" },
-                { "when": "value == true", "icon": "breached" }
+                { "when": "value == false", "icon": "closed" },
+                { "when": "value == true", "icon": "open" }
             ]
         }
     }

@@ -1,0 +1,59 @@
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "doorLock",
+    
+    "state": {
+        "secured": 0
+    },
+    
+    "getters": {
+        "secured": {
+            "api": "/api/devices/${id}/properties/secured",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'secured')]",
+            "updates": {
+                "secured": "event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "secured",
+            "conditions": [
+                { "when": "secured == 0", "icon": "open" },
+                { "when": "secured > 0", "icon": "closed" }
+            ]
+        }
+    },
+    
+    "actions": {
+        "secure": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/secure",
+            "body": { "args": [] }
+        },
+        "unsecure": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/unsecure",
+            "body": { "args": [] }
+        }
+    },
+    
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "button", "label": "Lock", "action": "secure" },
+                    { "type": "button", "label": "Unlock", "action": "unsecure" }
+                ]
+            }
+        ]
+    }
+}
