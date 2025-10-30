@@ -7,6 +7,63 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use std::fs;
+use std::collections::HashMap;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct HttpFetchResponse {
+    ok: bool,
+    status: u16,
+    body: String,
+}
+
+#[tauri::command]
+async fn http_fetch_insecure(
+    url: String,
+    method: String,
+    headers: HashMap<String, String>,
+    body: Option<String>,
+) -> Result<HttpFetchResponse, String> {
+    // Create HTTP client that accepts invalid certificates
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    
+    // Build request
+    let mut request = match method.to_uppercase().as_str() {
+        "GET" => client.get(&url),
+        "POST" => client.post(&url),
+        "PUT" => client.put(&url),
+        "DELETE" => client.delete(&url),
+        _ => return Err(format!("Unsupported HTTP method: {}", method)),
+    };
+    
+    // Add headers
+    for (key, value) in headers {
+        request = request.header(key, value);
+    }
+    
+    // Add body if provided
+    if let Some(body_data) = body {
+        request = request.body(body_data);
+    }
+    
+    // Send request
+    let response = request.send().await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+    
+    let status = response.status().as_u16();
+    let ok = response.status().is_success();
+    let body = response.text().await
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+    
+    Ok(HttpFetchResponse {
+        ok,
+        status,
+        body,
+    })
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct HC3Config {
@@ -638,6 +695,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
+            http_fetch_insecure,
             get_hc3_config, 
             get_homemap_config, 
             get_data_path, 

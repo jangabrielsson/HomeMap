@@ -8,6 +8,44 @@ export class HC3ApiManager {
     }
 
     /**
+     * Fetch with support for self-signed certificates (HTTPS)
+     * Uses custom Rust command for HTTPS to accept invalid certs
+     */
+    async fetch(url, options = {}) {
+        const config = this.homeMap.config;
+        
+        // For HTTPS, use our custom command that accepts self-signed certs
+        if (config.protocol === 'https') {
+            try {
+                const headers = {};
+                if (options.headers) {
+                    Object.assign(headers, options.headers);
+                }
+                
+                const response = await this.homeMap.invoke('http_fetch_insecure', {
+                    url,
+                    method: options.method || 'GET',
+                    headers,
+                    body: options.body || null
+                });
+                
+                // Return fetch-like response object
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    text: async () => response.body,
+                    json: async () => JSON.parse(response.body)
+                };
+            } catch (error) {
+                throw new Error(error);
+            }
+        } else {
+            // For HTTP, use normal Tauri fetch
+            return await this.homeMap.http.fetch(url, options);
+        }
+    }
+
+    /**
      * Check if authentication is locked due to repeated failures
      */
     isAuthLocked() {
@@ -65,7 +103,7 @@ export class HC3ApiManager {
             const url = `${config.protocol}://${config.host}/api/settings/info`;
             console.log('Testing connection to:', url);
             
-            const response = await this.homeMap.http.fetch(url, {
+            const response = await this.fetch(url, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Basic ${btoa(`${config.user}:${config.password}`)}`
@@ -169,7 +207,7 @@ export class HC3ApiManager {
             fetchOptions.body = bodyJson;
         }
         
-        const response = await this.homeMap.http.fetch(fullUrl, fetchOptions);
+        const response = await this.fetch(fullUrl, fetchOptions);
         
         console.log(`Action response - Status: ${response.status}, OK: ${response.ok}`);
         console.log('Response headers:', response.headers);
@@ -252,7 +290,7 @@ export class HC3ApiManager {
                         const api = getter.api.replace('${id}', device.id);
                         const url = `${config.protocol}://${config.host}${api}`;
                         
-                        const response = await this.homeMap.http.fetch(url, {
+                        const response = await this.fetch(url, {
                             method: 'GET',
                             headers: {
                                 'Authorization': `Basic ${btoa(`${config.user}:${config.password}`)}`

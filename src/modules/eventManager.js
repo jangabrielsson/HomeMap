@@ -54,7 +54,7 @@ export class EventManager {
     }
 
     async pollEvents() {
-        const { config, http } = this.homeMap;
+        const { config } = this.homeMap;
         
         while (this.isPolling) {
             try {
@@ -67,7 +67,7 @@ export class EventManager {
 
                 const url = `${config.protocol}://${config.host}/api/refreshStates?last=${this.lastEventId}&timeout=30`;
                 
-                const response = await http.fetch(url, {
+                const response = await this.homeMap.hc3ApiManager.fetch(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Basic ${btoa(`${config.user}:${config.password}`)}`
