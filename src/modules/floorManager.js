@@ -95,6 +95,9 @@ export class FloorManager {
         // Set current floor
         if (config.floors.length > 0) {
             this.homeMap.currentFloor = config.floors[0].id;
+            
+            // Restore zoom for first floor
+            this.homeMap.restoreZoomForFloor(config.floors[0].id);
         }
     }
 
@@ -265,5 +268,8 @@ export class FloorManager {
 
         // Update current floor
         this.homeMap.currentFloor = floorId;
+        
+        // Restore zoom level for this floor
+        this.homeMap.restoreZoomForFloor(floorId);
     }
 }

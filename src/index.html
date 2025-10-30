@@ -23,6 +23,17 @@
             <h1>🏠 HomeMap</h1>
             <div class="header-controls">
                 <button id="settingsBtn" class="icon-button" title="Settings">⚙️</button>
+                
+                <!-- Zoom controls (shown in edit mode) -->
+                <div class="zoom-controls" id="zoomControls" style="display: none;">
+                    <button id="zoomOut" class="zoom-btn" title="Zoom Out">−</button>
+                    <input type="range" id="zoomSlider" min="50" max="200" value="100" step="10">
+                    <span id="zoomLevel">100%</span>
+                    <button id="zoomIn" class="zoom-btn" title="Zoom In">+</button>
+                    <button id="zoomFit" class="zoom-btn-text" title="Fit to Window">Fit</button>
+                    <button id="zoomReset" class="zoom-btn-text" title="Reset to 100%">Reset</button>
+                </div>
+                
                 <label class="edit-toggle">
                     <input type="checkbox" id="editMode">
                     <span>Edit Mode</span>

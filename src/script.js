@@ -43,8 +43,13 @@ class HomeMap {
         this.contextMenuManager = new ContextMenuManager(this);
         this.hc3ApiManager = new HC3ApiManager(this);
         
+        // Zoom state
+        this.zoomLevel = 100; // Default 100%
+        this.zoomLevels = {}; // Per-floor zoom levels
+        
         this.setupEditMode();
         this.setupSettings();
+        this.setupZoomControls();
         this.setupCleanup();
         this.init();
     }
@@ -140,6 +145,118 @@ class HomeMap {
         installPackageBtn.addEventListener('click', async () => {
             await this.installPackage();
         });
+    }
+
+    setupZoomControls() {
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomIn = document.getElementById('zoomIn');
+        const zoomOut = document.getElementById('zoomOut');
+        const zoomFit = document.getElementById('zoomFit');
+        const zoomReset = document.getElementById('zoomReset');
+        const zoomLevel = document.getElementById('zoomLevel');
+
+        // Load saved zoom levels from localStorage
+        const saved = localStorage.getItem('homemap_zoom_levels');
+        if (saved) {
+            try {
+                this.zoomLevels = JSON.parse(saved);
+            } catch (e) {
+                console.warn('Failed to parse saved zoom levels');
+            }
+        }
+
+        // Slider change
+        zoomSlider.addEventListener('input', (e) => {
+            const zoom = parseInt(e.target.value);
+            this.setZoom(zoom);
+        });
+
+        // Zoom in button
+        zoomIn.addEventListener('click', () => {
+            const newZoom = Math.min(200, this.zoomLevel + 10);
+            zoomSlider.value = newZoom;
+            this.setZoom(newZoom);
+        });
+
+        // Zoom out button
+        zoomOut.addEventListener('click', () => {
+            const newZoom = Math.max(50, this.zoomLevel - 10);
+            zoomSlider.value = newZoom;
+            this.setZoom(newZoom);
+        });
+
+        // Fit to window button
+        zoomFit.addEventListener('click', () => {
+            this.fitToWindow();
+        });
+
+        // Reset button
+        zoomReset.addEventListener('click', () => {
+            zoomSlider.value = 100;
+            this.setZoom(100);
+        });
+    }
+
+    setZoom(zoom) {
+        this.zoomLevel = zoom;
+        
+        // Save zoom level for current floor
+        if (this.currentFloor) {
+            this.zoomLevels[this.currentFloor] = zoom;
+            localStorage.setItem('homemap_zoom_levels', JSON.stringify(this.zoomLevels));
+        }
+        
+        // Update UI
+        document.getElementById('zoomLevel').textContent = zoom + '%';
+        
+        // Apply transform to floor container
+        const activeFloor = document.querySelector('.floor-view.active');
+        if (activeFloor) {
+            const scale = zoom / 100;
+            activeFloor.style.transform = `scale(${scale})`;
+            activeFloor.style.transformOrigin = 'center center';
+        }
+    }
+
+    fitToWindow() {
+        const activeFloor = document.querySelector('.floor-view.active');
+        if (!activeFloor) return;
+        
+        const floorImage = activeFloor.querySelector('.floor-image');
+        if (!floorImage) return;
+        
+        const container = this.floorContainerEl;
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
+        
+        // Wait for image to load if needed
+        if (!floorImage.complete) {
+            floorImage.addEventListener('load', () => this.fitToWindow(), { once: true });
+            return;
+        }
+        
+        const imageWidth = floorImage.naturalWidth;
+        const imageHeight = floorImage.naturalHeight;
+        
+        // Calculate scale to fit (with 10px padding)
+        const scaleX = (containerWidth - 20) / imageWidth;
+        const scaleY = (containerHeight - 20) / imageHeight;
+        const scale = Math.min(scaleX, scaleY);
+        
+        // Convert to percentage and round to nearest 10
+        const zoomPercent = Math.round((scale * 100) / 10) * 10;
+        const clampedZoom = Math.max(50, Math.min(200, zoomPercent));
+        
+        // Update slider and apply zoom
+        document.getElementById('zoomSlider').value = clampedZoom;
+        this.setZoom(clampedZoom);
+    }
+
+    restoreZoomForFloor(floorId) {
+        // Restore saved zoom level for this floor, or default to 100%
+        const savedZoom = this.zoomLevels[floorId] || 100;
+        document.getElementById('zoomSlider').value = savedZoom;
+        this.setZoom(savedZoom);
     }
 
     async openSettings() {
@@ -297,6 +414,14 @@ class HomeMap {
     }
 
     toggleEditMode() {
+        // Show/hide zoom controls
+        const zoomControls = document.getElementById('zoomControls');
+        if (this.editMode) {
+            zoomControls.style.display = 'flex';
+        } else {
+            zoomControls.style.display = 'none';
+        }
+        
         // Update all device elements
         document.querySelectorAll('.device').forEach(deviceEl => {
             if (this.editMode) {
