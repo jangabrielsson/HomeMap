@@ -36,19 +36,17 @@ export class DialogManager {
         console.log('Package manager:', packageManager);
         console.log('Installed packages:', packageManager.installedPackages);
         
-        // Add currently loaded widgets
-        const loadedWidgets = Object.keys(this.app.widgetManager.widgets);
-        if (loadedWidgets.length > 0) {
-            widgetOptions += '<optgroup label="Loaded Widgets">';
-            loadedWidgets.forEach(type => {
-                const widget = this.app.widgetManager.widgets[type];
-                const packageInfo = widget._package ? ` (${widget._package})` : '';
-                widgetOptions += `<option value="${type}">${type}${packageInfo}</option>`;
+        // Add all built-in widgets
+        const builtInWidgets = await packageManager.discoverBuiltInWidgets();
+        if (builtInWidgets.length > 0) {
+            widgetOptions += '<optgroup label="Built-in Widgets">';
+            builtInWidgets.forEach(w => {
+                widgetOptions += `<option value="${w.id}">${w.id} (com.fibaro.built-in)</option>`;
             });
             widgetOptions += '</optgroup>';
         }
         
-        // Add widgets from installed packages that aren't loaded yet
+        // Add widgets from installed packages
         if (packageManager.installedPackages?.packages) {
             const availableWidgets = [];
             
@@ -64,7 +62,7 @@ export class DialogManager {
             }
             
             if (availableWidgets.length > 0) {
-                widgetOptions += '<optgroup label="Available from Packages">';
+                widgetOptions += '<optgroup label="Installed Packages">';
                 availableWidgets.forEach(w => {
                     widgetOptions += `<option value="${w.fullRef}">${w.id} (${w.package})</option>`;
                 });
@@ -145,33 +143,60 @@ export class DialogManager {
                 return;
             }
             
-            // Create new device with multi-floor format
-            const newDevice = {
-                id: deviceId,
-                name: deviceName,
-                floors: selectedFloors.map(fId => ({
+            // Create device entries - one per selected floor (simple format)
+            const newDevices = selectedFloors.map(fId => {
+                const device = {
+                    id: deviceId,
+                    name: deviceName,
                     floor_id: fId,
                     position: fId === floorId ? position : { x: 500, y: 300 } // Use click position for current floor
-                }))
-            };
+                };
+                
+                // Handle widget reference - could be simple type or package/widget
+                if (deviceType.includes('/')) {
+                    // Explicit package reference (e.g., "com.jangabrielsson.gauge/gauge")
+                    device.widget = deviceType;
+                    // Extract the widget ID part for type
+                    device.type = deviceType.split('/')[1];
+                } else {
+                    // Simple widget type
+                    device.type = deviceType;
+                }
+                
+                return device;
+            });
             
-            // Handle widget reference - could be simple type or package/widget
-            if (deviceType.includes('/')) {
-                // Explicit package reference (e.g., "com.jangabrielsson.gauge/gauge")
-                newDevice.widget = deviceType;
-                // Extract the widget ID part for type
-                newDevice.type = deviceType.split('/')[1];
-            } else {
-                // Simple widget type
-                newDevice.type = deviceType;
+            // Add all device entries to config
+            this.app.homemapConfig.devices.push(...newDevices);
+            
+            console.log('Adding new device(s):', newDevices);
+            console.log('Total devices now:', this.app.homemapConfig.devices.length);
+            
+            try {
+                await this.app.saveConfig();
+                console.log('Config saved successfully');
+                
+                // Reload widgets for the new device type if needed
+                await this.app.loadWidgets();
+                console.log('Widgets reloaded');
+                
+                // Re-render floors to show the new device
+                this.app.floorManager.renderFloors();
+                console.log('Floors rendered');
+            } catch (error) {
+                console.error('Error adding device:', error);
+                alert(`Failed to add device: ${error.message}`);
+                // Remove all added device entries if save failed
+                newDevices.forEach(newDev => {
+                    const index = this.app.homemapConfig.devices.findIndex(d => 
+                        d.id === newDev.id && d.floor_id === newDev.floor_id
+                    );
+                    if (index !== -1) {
+                        this.app.homemapConfig.devices.splice(index, 1);
+                    }
+                });
+                return;
             }
-            
-            // Add to config
-            this.app.homemapConfig.devices.push(newDevice);
-            
-            await this.app.saveConfig();
-            await this.app.loadDevices(); // Reload to fetch from HC3
-            this.app.renderFloors();
             
             document.body.removeChild(modal);
         });
@@ -222,15 +247,16 @@ export class DialogManager {
         // Determine current widget reference (could be "type" or explicit "widget")
         const currentWidget = device.widget || device.type;
         
-        // Add currently loaded widgets
-        const loadedWidgets = Object.keys(this.app.widgetManager.widgets);
-        if (loadedWidgets.length > 0) {
-            widgetOptions += '<optgroup label="Loaded Widgets">';
-            loadedWidgets.forEach(type => {
-                const widget = this.app.widgetManager.widgets[type];
-                const packageInfo = widget._package ? ` (${widget._package})` : '';
-                const selected = type === currentWidget ? 'selected' : '';
-                widgetOptions += `<option value="${type}" ${selected}>${type}${packageInfo}</option>`;
+        // Get loaded widget types to avoid duplicates
+        const loadedWidgetTypes = new Set(Object.keys(this.app.widgetManager.widgets));
+        
+        // Add built-in widgets (including both loaded and unloaded)
+        const builtInWidgets = await packageManager.discoverBuiltInWidgets();
+        if (builtInWidgets.length > 0) {
+            widgetOptions += '<optgroup label="Built-in Widgets">';
+            builtInWidgets.forEach(w => {
+                const selected = w.id === currentWidget ? 'selected' : '';
+                widgetOptions += `<option value="${w.id}" ${selected}>${w.id} (com.fibaro.built-in)</option>`;
             });
             widgetOptions += '</optgroup>';
         }
@@ -253,7 +279,7 @@ export class DialogManager {
             }
             
             if (availableWidgets.length > 0) {
-                widgetOptions += '<optgroup label="Available from Packages">';
+                widgetOptions += '<optgroup label="Installed Packages">';
                 availableWidgets.forEach(w => {
                     const selected = w.selected ? 'selected' : '';
                     widgetOptions += `<option value="${w.fullRef}" ${selected}>${w.id} (${w.package})</option>`;

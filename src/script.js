@@ -547,6 +547,11 @@ class HomeMap {
         this.buildEventDispatchTable();
     }
 
+    async saveConfig() {
+        // Delegate to HC3ApiManager
+        await this.hc3ApiManager.saveConfig();
+    }
+
     buildEventDispatchTable() {
         // Delegate to EventManager
         this.eventManager.buildEventDispatch(this.homemapConfig.devices, this.widgetManager.widgets);

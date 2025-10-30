@@ -543,6 +543,34 @@ class PackageManager {
     }
 
     /**
+     * Discover available built-in widgets
+     * Returns list of widget IDs found in widgets/built-in directory
+     */
+    async discoverBuiltInWidgets() {
+        const widgets = [];
+        
+        try {
+            const builtInPath = joinPath(this.dataPath, 'widgets', 'built-in');
+            const files = await this.invoke('list_directory', { path: builtInPath });
+            
+            for (const file of files) {
+                if (file.endsWith('.json')) {
+                    const widgetId = file.replace('.json', '');
+                    widgets.push({
+                        id: widgetId,
+                        package: 'built-in',
+                        fullRef: `built-in/${widgetId}`
+                    });
+                }
+            }
+        } catch (error) {
+            console.warn('Could not discover built-in widgets:', error);
+        }
+        
+        return widgets;
+    }
+
+    /**
      * Set widget mapping for a device type
      */
     async setWidgetMapping(deviceType, packageId, widgetId) {
