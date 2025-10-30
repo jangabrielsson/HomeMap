@@ -3,12 +3,63 @@
 export class HC3ApiManager {
     constructor(homeMap) {
         this.homeMap = homeMap;
+        this.authLocked = false; // Flag to prevent repeated failed auth attempts
+        this.authFailureCount = 0;
+    }
+
+    /**
+     * Check if authentication is locked due to repeated failures
+     */
+    isAuthLocked() {
+        return this.authLocked;
+    }
+
+    /**
+     * Reset authentication lock (call after credentials are updated)
+     */
+    resetAuthLock() {
+        this.authLocked = false;
+        this.authFailureCount = 0;
+        console.log('Auth lock reset');
+    }
+
+    /**
+     * Handle authorization failure
+     */
+    async handleAuthFailure(statusCode) {
+        this.authFailureCount++;
+        console.error(`Auth failure #${this.authFailureCount} - HTTP ${statusCode}`);
+        
+        if (this.authFailureCount >= 2 && !this.authLocked) {
+            this.authLocked = true;
+            
+            // Stop event polling immediately
+            if (this.homeMap.eventManager) {
+                this.homeMap.eventManager.stopEventPolling();
+            }
+            
+            this.updateStatus('error', 'Authentication Failed - Check Credentials');
+            
+            // Show dialog to user
+            await window.__TAURI__.dialog.message(
+                'Authentication failed after multiple attempts. HC3 may lock your account after too many failed attempts.\n\nPlease check your username and password in Settings, then reload the application.',
+                {
+                    title: 'Authentication Error',
+                    kind: 'error'
+                }
+            );
+        }
     }
 
     /**
      * Test connection to HC3
      */
     async testConnection() {
+        if (this.authLocked) {
+            console.warn('Auth locked, skipping connection test');
+            return;
+        }
+
         try {
             const config = this.homeMap.config;
             const url = `${config.protocol}://${config.host}/api/settings/info`;
@@ -28,6 +79,10 @@ export class HC3ApiManager {
                 const data = JSON.parse(text);
                 console.log('HC3 data:', data);
                 this.updateStatus('connected', `Connected to HC3 v${data.softVersion || 'unknown'}`);
+                // Reset auth failure count on success
+                this.authFailureCount = 0;
+            } else if (response.status === 401 || response.status === 403) {
+                await this.handleAuthFailure(response.status);
             } else {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -54,6 +109,11 @@ export class HC3ApiManager {
      * Execute an action on a device
      */
     async executeAction(device, action, value = null) {
+        if (this.authLocked) {
+            console.warn('Auth locked, cannot execute action');
+            throw new Error('Authentication locked. Please update credentials and reload.');
+        }
+
         const config = this.homeMap.config;
         
         // Build API URL by replacing ${id} with device.id
@@ -116,6 +176,12 @@ export class HC3ApiManager {
         console.log('Response data:', response.data);
         
         if (!response.ok) {
+            // Check for authentication failures
+            if (response.status === 401 || response.status === 403) {
+                await this.handleAuthFailure(response.status);
+                throw new Error(`Authentication failed (HTTP ${response.status})`);
+            }
+
             // Try to get error details
             let errorDetail = response.statusText || 'Bad Request';
             
@@ -146,8 +212,9 @@ export class HC3ApiManager {
      */
     async saveConfig() {
         try {
-            const configJson = JSON.stringify(this.homeMap.homemapConfig, null, 4);
-            await this.homeMap.invoke('save_config', { configJson });
+            const content = JSON.stringify(this.homeMap.homemapConfig, null, 4);
+            const filePath = `${this.homeMap.dataPath}/config.json`;
+            await this.homeMap.invoke('save_config', { filePath, content });
             console.log('Config saved successfully');
         } catch (error) {
             console.error('Failed to save config:', error);
@@ -159,6 +226,11 @@ export class HC3ApiManager {
      * Update device icon by fetching current state from HC3
      */
     async updateDeviceIcon(device, iconElement, textElement) {
+        if (this.authLocked) {
+            // Silently skip update when auth is locked
+            return;
+        }
+
         const widget = this.homeMap.widgetManager.getWidget(device.type);
         if (!widget) {
             console.warn(`No widget definition for device ${device.id} (type: ${device.type})`);
@@ -226,6 +298,10 @@ export class HC3ApiManager {
                             
                             device.state[stateProp] = value;
                             console.log(`Set device ${device.id} state.${stateProp} =`, value, `(type: ${typeof value})`);
+                        } else if (response.status === 401 || response.status === 403) {
+                            // Authentication failure
+                            await this.handleAuthFailure(response.status);
+                            return; // Stop processing further devices
                         } else {
                             console.error(`Failed to fetch status for device ${device.id}: HTTP ${response.status}`);
                         }

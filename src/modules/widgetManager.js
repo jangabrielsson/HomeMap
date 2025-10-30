@@ -1,5 +1,6 @@
 // widgetManager.js - Widget loading, rendering, and icon management
 import { APP_VERSION, MIN_WIDGET_VERSION, isVersionCompatible } from './utils.js';
+import packageManager from './packageManager.js';
 
 export class WidgetManager {
     constructor(dataPath, invokeFunction) {
@@ -7,21 +8,74 @@ export class WidgetManager {
         this.invoke = invokeFunction;
         this.widgets = {};
         this.iconSets = new Map();
+        this.packageManager = packageManager;
     }
 
     /**
      * Load an icon set from disk and cache it
+     * Now supports package-aware icon loading
      */
-    async loadIconSet(iconSetName) {
+    async loadIconSet(iconSetName, packageId = null) {
+        const cacheKey = packageId ? `${packageId}/${iconSetName}` : iconSetName;
+        
         // Check cache first
-        if (this.iconSets.has(iconSetName)) {
-            return this.iconSets.get(iconSetName);
+        if (this.iconSets.has(cacheKey)) {
+            return this.iconSets.get(cacheKey);
         }
         
         try {
-            // List files in the icon set directory
-            const iconSetPath = `${this.dataPath}/icons/${iconSetName}`;
-            const files = await this.invoke('list_directory', { path: iconSetPath });
+            // Determine icon set path based on package
+            let iconSetPath;
+            let iconPathPrefix;
+            let files = null;
+            
+            if (packageId && packageId !== 'legacy' && packageId !== 'com.fibaro.built-in') {
+                // Package icon set
+                iconSetPath = `${this.dataPath}/icons/packages/${packageId}/${iconSetName}`;
+                iconPathPrefix = `icons/packages/${packageId}/${iconSetName}`;
+                try {
+                    files = await this.invoke('list_directory', { path: iconSetPath });
+                } catch (error) {
+                    console.warn(`Package icon set not found at ${iconSetPath}`);
+                }
+            } else if (packageId === 'com.fibaro.built-in') {
+                // Try built-in first
+                iconSetPath = `${this.dataPath}/icons/built-in/${iconSetName}`;
+                iconPathPrefix = `icons/built-in/${iconSetName}`;
+                try {
+                    files = await this.invoke('list_directory', { path: iconSetPath });
+                } catch {
+                    // Fallback to root icons directory (legacy)
+                    iconSetPath = `${this.dataPath}/icons/${iconSetName}`;
+                    iconPathPrefix = `icons/${iconSetName}`;
+                    try {
+                        files = await this.invoke('list_directory', { path: iconSetPath });
+                    } catch (error) {
+                        console.warn(`Built-in icon set not found at ${iconSetPath}`);
+                    }
+                }
+            } else {
+                // Legacy or no package - try root first
+                iconSetPath = `${this.dataPath}/icons/${iconSetName}`;
+                iconPathPrefix = `icons/${iconSetName}`;
+                try {
+                    files = await this.invoke('list_directory', { path: iconSetPath });
+                } catch {
+                    // Try built-in as fallback
+                    iconSetPath = `${this.dataPath}/icons/built-in/${iconSetName}`;
+                    iconPathPrefix = `icons/built-in/${iconSetName}`;
+                    try {
+                        files = await this.invoke('list_directory', { path: iconSetPath });
+                    } catch (error) {
+                        console.warn(`Icon set not found at ${iconSetPath}`);
+                    }
+                }
+            }
+            
+            if (!files) {
+                console.error(`Failed to load icon set "${iconSetName}"`);
+                return {};
+            }
             
             // Build a map of icon names to full paths
             const iconMap = {};
@@ -31,17 +85,18 @@ export class WidgetManager {
                 const ext = file.substring(file.lastIndexOf('.')).toLowerCase();
                 if (supportedExtensions.includes(ext)) {
                     const iconName = file.substring(0, file.lastIndexOf('.'));
-                    iconMap[iconName] = `icons/${iconSetName}/${file}`;
+                    iconMap[iconName] = `${iconPathPrefix}/${file}`;
                 }
             }
             
-            console.log(`Loaded icon set "${iconSetName}":`, Object.keys(iconMap));
+            const packageInfo = packageId ? ` from ${packageId}` : '';
+            console.log(`Loaded icon set "${iconSetName}"${packageInfo}:`, Object.keys(iconMap));
             
             // Cache it
-            this.iconSets.set(iconSetName, iconMap);
+            this.iconSets.set(cacheKey, iconMap);
             return iconMap;
         } catch (error) {
-            console.error(`Failed to load icon set "${iconSetName}":`, error);
+            console.error(`Failed to load icon set "${iconSetName}" (package: ${packageId}):`, error);
             return {};
         }
     }
@@ -52,27 +107,52 @@ export class WidgetManager {
     async loadWidgets(devices) {
         this.widgets = {};
         
+        // Initialize package manager if not already done
+        if (!this.packageManager.dataPath) {
+            await this.packageManager.init();
+        }
+        
         // Get unique widget types from devices
         const widgetTypes = [...new Set(devices?.map(d => d.type) || [])];
         
         for (const type of widgetTypes) {
             try {
-                const jsonContent = await this.invoke('read_widget_json', { widgetType: type });
-                const widget = JSON.parse(jsonContent);
+                // Try to resolve widget through package manager
+                // Check if device has explicit widget reference
+                const device = devices.find(d => d.type === type);
+                const explicitWidget = device?.widget;
+                
+                let widget = await this.packageManager.resolveWidget(type, explicitWidget);
+                
+                // Fallback to old method for backward compatibility
+                if (!widget) {
+                    try {
+                        const jsonContent = await this.invoke('read_widget_json', { widgetType: type });
+                        widget = JSON.parse(jsonContent);
+                        widget._package = 'legacy'; // Mark as legacy
+                    } catch (error) {
+                        console.warn(`No widget found for ${type} in packages or legacy location`);
+                        continue;
+                    }
+                }
                 
                 // Check widget version compatibility
-                if (!isVersionCompatible(widget.widgetVersion, MIN_WIDGET_VERSION)) {
+                if (widget.widgetVersion && !isVersionCompatible(widget.widgetVersion, MIN_WIDGET_VERSION)) {
                     console.error(`Widget "${type}" version ${widget.widgetVersion} is not compatible with app version ${APP_VERSION} (requires >= ${MIN_WIDGET_VERSION})`);
                     continue;
                 }
                 
                 // Load icon set if specified
                 if (widget.iconSet) {
-                    widget.iconSetMap = await this.loadIconSet(widget.iconSet);
+                    widget.iconSetMap = await this.loadIconSet(widget.iconSet, widget._package);
+                } else if (widget.render?.icon?.set) {
+                    // New render format
+                    widget.iconSetMap = await this.loadIconSet(widget.render.icon.set, widget._package);
                 }
                 
                 this.widgets[type] = widget;
-                console.log(`Loaded widget definition for ${type} (version ${widget.widgetVersion})`);
+                const packageInfo = widget._package ? ` from ${widget._package}` : '';
+                console.log(`Loaded widget definition for ${type}${packageInfo}`);
             } catch (error) {
                 console.error(`Failed to load widget ${type}:`, error);
             }

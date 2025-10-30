@@ -15,6 +15,7 @@ import { DialogManager } from './modules/dialogManager.js';
 import { FloorManager } from './modules/floorManager.js';
 import { ContextMenuManager } from './modules/contextMenuManager.js';
 import { HC3ApiManager } from './modules/hc3ApiManager.js';
+import packageManager from './modules/packageManager.js';
 
 class HomeMap {
     constructor() {
@@ -133,6 +134,12 @@ class HomeMap {
         browseHomemapPath.addEventListener('click', async () => {
             await this.browseHomemapPath();
         });
+        
+        // Install package button
+        const installPackageBtn = document.getElementById('installPackageBtn');
+        installPackageBtn.addEventListener('click', async () => {
+            await this.installPackage();
+        });
     }
 
     async openSettings() {
@@ -147,11 +154,106 @@ class HomeMap {
             document.getElementById('hc3Protocol').value = settings.hc3_protocol || 'http';
             document.getElementById('homemapPath').value = settings.homemap_path || '';
             
+            // Load and display installed packages
+            await this.loadInstalledPackages();
+            
             // Show panel
             document.getElementById('settingsPanel').classList.add('open');
         } catch (error) {
             console.error('Failed to load settings:', error);
             alert('Failed to load settings: ' + error);
+        }
+    }
+    
+    async loadInstalledPackages() {
+        try {
+            const packagesList = document.getElementById('installedPackagesList');
+            const packages = packageManager.getInstalledPackages();
+            
+            if (packages.length === 0) {
+                packagesList.innerHTML = '<p class="no-packages">No packages installed yet</p>';
+                return;
+            }
+            
+            packagesList.innerHTML = packages.map(pkg => `
+                <div class="package-item">
+                    <div class="package-info">
+                        <strong>${pkg.manifest.name}</strong> v${pkg.version}
+                        <br>
+                        <small>by ${pkg.manifest.author} • ${pkg.manifest.id}</small>
+                    </div>
+                    <button class="danger-button" onclick="window.homeMap.uninstallPackage('${pkg.id}')">Uninstall</button>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Failed to load installed packages:', error);
+        }
+    }
+    
+    async installPackage() {
+        try {
+            console.log('Starting package installation...');
+            const manifest = await packageManager.installPackage();
+            if (manifest) {
+                console.log('Package installed, manifest:', manifest);
+                
+                // Reload installed packages list first
+                console.log('Reloading installed packages...');
+                await this.loadInstalledPackages();
+                console.log('Installed packages reloaded');
+                
+                // Reload widgets to pick up new package
+                if (this.homemapConfig && this.homemapConfig.devices) {
+                    console.log('Reloading widgets...');
+                    await this.loadWidgets();
+                    console.log('Widgets reloaded');
+                }
+                
+                console.log('Installation complete');
+                
+                // Show success message using Tauri dialog (non-blocking)
+                await window.__TAURI__.dialog.message(`Package "${manifest.name}" installed successfully!`, {
+                    title: 'Installation Complete',
+                    kind: 'info'
+                });
+            }
+        } catch (error) {
+            console.error('Failed to install package:', error);
+            await window.__TAURI__.dialog.message(`Failed to install package: ${error.message}`, {
+                title: 'Installation Failed',
+                kind: 'error'
+            });
+        }
+    }
+    
+    async uninstallPackage(packageId) {
+        const confirmed = await window.__TAURI__.dialog.confirm(
+            `Are you sure you want to uninstall "${packageId}"?`,
+            {
+                title: 'Confirm Uninstall',
+                kind: 'warning'
+            }
+        );
+        
+        if (!confirmed) {
+            return;
+        }
+        
+        try {
+            await packageManager.uninstallPackage(packageId);
+            await window.__TAURI__.dialog.message('Package uninstalled successfully!', {
+                title: 'Uninstall Complete',
+                kind: 'info'
+            });
+            await this.loadInstalledPackages();
+            // Reload widgets
+            await this.loadWidgets();
+        } catch (error) {
+            console.error('Failed to uninstall package:', error);
+            await window.__TAURI__.dialog.message(`Failed to uninstall package: ${error.message}`, {
+                title: 'Uninstall Failed',
+                kind: 'error'
+            });
         }
     }
 
@@ -170,6 +272,9 @@ class HomeMap {
             };
 
             await this.invoke('save_app_settings', { settings });
+            
+            // Reset auth lock when credentials are updated
+            this.hc3ApiManager.resetAuthLock();
             
             this.closeSettings();
             alert('Settings saved! Please restart the app for changes to take effect.');

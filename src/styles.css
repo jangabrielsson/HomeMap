@@ -791,3 +791,58 @@ main {
 .btn-delete:hover {
     background: #c0392b;
 }
+
+/* Package Manager Styles */
+.packages-list {
+    margin-top: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.package-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.package-info {
+    flex: 1;
+}
+
+.package-info strong {
+    color: #3498db;
+    font-size: 14px;
+}
+
+.package-info small {
+    color: #888;
+    font-size: 12px;
+}
+
+.no-packages {
+    text-align: center;
+    color: #666;
+    padding: 20px;
+    font-style: italic;
+}
+
+.danger-button {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.danger-button:hover {
+    background: #c0392b;
+}
+

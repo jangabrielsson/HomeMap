@@ -206,14 +206,26 @@ fn list_directory(path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-fn save_config(config_json: String) -> Result<(), String> {
+fn save_config(file_path: String, content: String) -> Result<(), String> {
+    // Validate path is within homemap data directory
     let homemap_path = get_homemap_data_path()?;
-    let config_path = homemap_path.join("config.json");
+    let target_path = PathBuf::from(&file_path);
     
-    fs::write(&config_path, config_json)
-        .map_err(|e| format!("Failed to write config file: {}", e))?;
+    // Ensure the path is within homemap data directory
+    if !target_path.starts_with(&homemap_path) {
+        return Err("Access denied: path must be within homemap data directory".to_string());
+    }
     
-    println!("Saved config to: {:?}", config_path);
+    // Create parent directories if needed
+    if let Some(parent) = target_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directories: {}", e))?;
+    }
+    
+    fs::write(&target_path, content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    println!("Saved file to: {:?}", target_path);
     Ok(())
 }
 
@@ -301,6 +313,74 @@ fn create_config_folder(app: tauri::AppHandle, destination_path: String) -> Resu
     
     // Copy the template
     copy_dir_recursive(&template_path, &homemapdata_dest)?;
+    
+    // Create package directory structure
+    let widgets_builtin = homemapdata_dest.join("widgets").join("built-in");
+    let widgets_packages = homemapdata_dest.join("widgets").join("packages");
+    let icons_builtin = homemapdata_dest.join("icons").join("built-in");
+    let icons_packages = homemapdata_dest.join("icons").join("packages");
+    
+    fs::create_dir_all(&widgets_builtin)
+        .map_err(|e| format!("Failed to create widgets/built-in: {}", e))?;
+    fs::create_dir_all(&widgets_packages)
+        .map_err(|e| format!("Failed to create widgets/packages: {}", e))?;
+    fs::create_dir_all(&icons_builtin)
+        .map_err(|e| format!("Failed to create icons/built-in: {}", e))?;
+    fs::create_dir_all(&icons_packages)
+        .map_err(|e| format!("Failed to create icons/packages: {}", e))?;
+    
+    // Move existing widgets to built-in (if any)
+    let widgets_dir = homemapdata_dest.join("widgets");
+    if let Ok(entries) = fs::read_dir(&widgets_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                let file_name = entry.file_name();
+                
+                // Skip the built-in and packages directories we just created
+                if file_name == "built-in" || file_name == "packages" {
+                    continue;
+                }
+                
+                // Move JSON files to built-in
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    let dest = widgets_builtin.join(&file_name);
+                    fs::rename(&path, &dest)
+                        .map_err(|e| format!("Failed to move widget to built-in: {}", e))?;
+                }
+            }
+        }
+    }
+    
+    // Move existing icon sets to built-in (if any)
+    let icons_dir = homemapdata_dest.join("icons");
+    if let Ok(entries) = fs::read_dir(&icons_dir) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                let file_name = entry.file_name();
+                
+                // Skip the built-in and packages directories we just created
+                if file_name == "built-in" || file_name == "packages" {
+                    continue;
+                }
+                
+                // Move directories to built-in
+                if path.is_dir() {
+                    let dest = icons_builtin.join(&file_name);
+                    fs::rename(&path, &dest)
+                        .map_err(|e| format!("Failed to move icon set to built-in: {}", e))?;
+                }
+            }
+        }
+    }
+    
+    // Create temp directory for package installation
+    let temp_dir = homemapdata_dest.join("temp");
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+    
+    println!("Package directory structure created successfully");
     
     Ok(homemapdata_dest.to_string_lossy().to_string())
 }
@@ -391,6 +471,150 @@ fn load_app_settings() -> Result<Option<AppSettings>, String> {
     Ok(Some(settings))
 }
 
+// Package management structures
+#[derive(Debug, Serialize, Deserialize)]
+struct PackageManifest {
+    id: String,
+    name: String,
+    version: String,
+    author: String,
+    description: String,
+    requires: PackageRequires,
+    provides: PackageProvides,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    homepage: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    device_types: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PackageRequires {
+    #[serde(rename = "homeMapVersion")]
+    home_map_version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PackageProvides {
+    widgets: Vec<String>,
+    #[serde(rename = "iconSets")]
+    icon_sets: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ExtractedPackage {
+    manifest: PackageManifest,
+    #[serde(rename = "tempDir")]
+    temp_dir: String,
+}
+
+#[tauri::command]
+fn extract_widget_package(hwp_path: String, data_path: String) -> Result<ExtractedPackage, String> {
+    use zip::ZipArchive;
+    
+    println!("Extracting package from: {}", hwp_path);
+    
+    // Open the ZIP file
+    let file = fs::File::open(&hwp_path)
+        .map_err(|e| format!("Failed to open package file: {}", e))?;
+    
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
+    
+    // Create temporary directory within the data path
+    let temp_dir = PathBuf::from(&data_path).join("temp").join(format!("package_{}", 
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    ));
+    
+    fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+    
+    println!("Extracting to temp dir: {:?}", temp_dir);
+    
+    // Extract all files
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)
+            .map_err(|e| format!("Failed to read file from archive: {}", e))?;
+        
+        let outpath = match file.enclosed_name() {
+            Some(path) => temp_dir.join(path),
+            None => continue,
+        };
+        
+        if file.name().ends_with('/') {
+            // Directory
+            fs::create_dir_all(&outpath)
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        } else {
+            // File
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    fs::create_dir_all(p)
+                        .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+                }
+            }
+            
+            let mut outfile = fs::File::create(&outpath)
+                .map_err(|e| format!("Failed to create file: {}", e))?;
+            
+            std::io::copy(&mut file, &mut outfile)
+                .map_err(|e| format!("Failed to extract file: {}", e))?;
+        }
+    }
+    
+    // Read and parse manifest
+    let manifest_path = temp_dir.join("manifest.json");
+    if !manifest_path.exists() {
+        return Err("Package is missing manifest.json file".to_string());
+    }
+    
+    let manifest_content = fs::read_to_string(&manifest_path)
+        .map_err(|e| format!("Failed to read manifest: {}", e))?;
+    
+    let manifest: PackageManifest = serde_json::from_str(&manifest_content)
+        .map_err(|e| format!("Failed to parse manifest: {}", e))?;
+    
+    println!("Package extracted: {} v{}", manifest.name, manifest.version);
+    
+    Ok(ExtractedPackage {
+        manifest,
+        temp_dir: temp_dir.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+fn copy_file(src: String, dst: String) -> Result<(), String> {
+    std::fs::copy(&src, &dst)
+        .map_err(|e| format!("Failed to copy file from {} to {}: {}", src, dst, e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn create_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path)
+        .map_err(|e| format!("Failed to create directory {}: {}", path, e))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn path_exists(path: String) -> Result<bool, String> {
+    Ok(std::path::Path::new(&path).exists())
+}
+
+#[tauri::command]
+fn is_directory(path: String) -> Result<bool, String> {
+    Ok(std::path::Path::new(&path).is_dir())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -412,7 +636,12 @@ pub fn run() {
             get_app_settings,
             save_app_settings,
             select_homemap_folder,
-            load_app_settings
+            load_app_settings,
+            extract_widget_package,
+            copy_file,
+            create_dir,
+            path_exists,
+            is_directory
         ])
         .setup(|app| {
             // Create menu items

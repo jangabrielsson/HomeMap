@@ -25,6 +25,7 @@ dotenvy = "0.15"
 dirs = "5"
 base64 = "0.22"
 rfd = "0.15"
+zip = "2.1"
 
 [features]
 default = ["custom-protocol"]

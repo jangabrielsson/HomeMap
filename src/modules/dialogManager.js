@@ -8,9 +8,15 @@ export class DialogManager {
     /**
      * Show dialog to add a new device
      */
-    showAddDeviceDialog(floorId, position) {
+    async showAddDeviceDialog(floorId, position) {
         const modal = document.createElement('div');
         modal.className = 'slider-modal';
+        
+        // Ensure package manager is initialized
+        const packageManager = this.app.widgetManager.packageManager;
+        if (!packageManager.dataPath) {
+            await packageManager.init();
+        }
         
         // Build floor checkboxes
         const floorsHtml = this.app.homemapConfig.floors.map(floor => {
@@ -23,10 +29,48 @@ export class DialogManager {
             `;
         }).join('');
         
-        // Build widget type options
-        const widgetOptions = Object.keys(this.app.widgetManager.widgets).map(type => {
-            return `<option value="${type}">${type}</option>`;
-        }).join('');
+        // Build widget type options - include all installed packages
+        let widgetOptions = '';
+        
+        console.log('Building widget options...');
+        console.log('Package manager:', packageManager);
+        console.log('Installed packages:', packageManager.installedPackages);
+        
+        // Add currently loaded widgets
+        const loadedWidgets = Object.keys(this.app.widgetManager.widgets);
+        if (loadedWidgets.length > 0) {
+            widgetOptions += '<optgroup label="Loaded Widgets">';
+            loadedWidgets.forEach(type => {
+                const widget = this.app.widgetManager.widgets[type];
+                const packageInfo = widget._package ? ` (${widget._package})` : '';
+                widgetOptions += `<option value="${type}">${type}${packageInfo}</option>`;
+            });
+            widgetOptions += '</optgroup>';
+        }
+        
+        // Add widgets from installed packages that aren't loaded yet
+        if (packageManager.installedPackages?.packages) {
+            const availableWidgets = [];
+            
+            for (const [packageId, packageInfo] of Object.entries(packageManager.installedPackages.packages)) {
+                for (const widgetId of packageInfo.manifest.provides.widgets) {
+                    // Always add package version with full reference
+                    availableWidgets.push({
+                        id: widgetId,
+                        package: packageId,
+                        fullRef: `${packageId}/${widgetId}`
+                    });
+                }
+            }
+            
+            if (availableWidgets.length > 0) {
+                widgetOptions += '<optgroup label="Available from Packages">';
+                availableWidgets.forEach(w => {
+                    widgetOptions += `<option value="${w.fullRef}">${w.id} (${w.package})</option>`;
+                });
+                widgetOptions += '</optgroup>';
+            }
+        }
         
         modal.innerHTML = `
             <div class="slider-content edit-dialog">
@@ -105,12 +149,22 @@ export class DialogManager {
             const newDevice = {
                 id: deviceId,
                 name: deviceName,
-                type: deviceType,
                 floors: selectedFloors.map(fId => ({
                     floor_id: fId,
                     position: fId === floorId ? position : { x: 500, y: 300 } // Use click position for current floor
                 }))
             };
+            
+            // Handle widget reference - could be simple type or package/widget
+            if (deviceType.includes('/')) {
+                // Explicit package reference (e.g., "com.jangabrielsson.gauge/gauge")
+                newDevice.widget = deviceType;
+                // Extract the widget ID part for type
+                newDevice.type = deviceType.split('/')[1];
+            } else {
+                // Simple widget type
+                newDevice.type = deviceType;
+            }
             
             // Add to config
             this.app.homemapConfig.devices.push(newDevice);
@@ -138,9 +192,15 @@ export class DialogManager {
     /**
      * Show dialog to edit an existing device
      */
-    showEditDeviceDialog(device) {
+    async showEditDeviceDialog(device) {
         const modal = document.createElement('div');
         modal.className = 'slider-modal';
+        
+        // Ensure package manager is initialized
+        const packageManager = this.app.widgetManager.packageManager;
+        if (!packageManager.dataPath) {
+            await packageManager.init();
+        }
         
         // Get current device floors
         const deviceFloors = this.app.getDeviceFloors(device);
@@ -156,11 +216,51 @@ export class DialogManager {
             `;
         }).join('');
         
-        // Build widget type options
-        const widgetOptions = Object.keys(this.app.widgetManager.widgets).map(type => {
-            const selected = type === device.type ? 'selected' : '';
-            return `<option value="${type}" ${selected}>${type}</option>`;
-        }).join('');
+        // Build widget type options - include all installed packages
+        let widgetOptions = '';
+        
+        // Determine current widget reference (could be "type" or explicit "widget")
+        const currentWidget = device.widget || device.type;
+        
+        // Add currently loaded widgets
+        const loadedWidgets = Object.keys(this.app.widgetManager.widgets);
+        if (loadedWidgets.length > 0) {
+            widgetOptions += '<optgroup label="Loaded Widgets">';
+            loadedWidgets.forEach(type => {
+                const widget = this.app.widgetManager.widgets[type];
+                const packageInfo = widget._package ? ` (${widget._package})` : '';
+                const selected = type === currentWidget ? 'selected' : '';
+                widgetOptions += `<option value="${type}" ${selected}>${type}${packageInfo}</option>`;
+            });
+            widgetOptions += '</optgroup>';
+        }
+        
+        // Add widgets from installed packages that aren't loaded yet
+        if (packageManager.installedPackages?.packages) {
+            const availableWidgets = [];
+            
+            for (const [packageId, packageInfo] of Object.entries(packageManager.installedPackages.packages)) {
+                for (const widgetId of packageInfo.manifest.provides.widgets) {
+                    const fullRef = `${packageId}/${widgetId}`;
+                    // Always add package version with full reference
+                    availableWidgets.push({
+                        id: widgetId,
+                        fullRef: fullRef,
+                        package: packageId,
+                        selected: fullRef === currentWidget
+                    });
+                }
+            }
+            
+            if (availableWidgets.length > 0) {
+                widgetOptions += '<optgroup label="Available from Packages">';
+                availableWidgets.forEach(w => {
+                    const selected = w.selected ? 'selected' : '';
+                    widgetOptions += `<option value="${w.fullRef}" ${selected}>${w.id} (${w.package})</option>`;
+                });
+                widgetOptions += '</optgroup>';
+            }
+        }
         
         modal.innerHTML = `
             <div class="slider-content edit-dialog">
@@ -215,12 +315,26 @@ export class DialogManager {
             // Update device properties
             const configDevice = this.app.homemapConfig.devices.find(d => d.id === device.id);
             if (configDevice) {
-                const typeChanged = configDevice.type !== newType;
+                // Handle widget reference - could be simple type or package/widget
+                let actualType = newType;
+                if (newType.includes('/')) {
+                    // Explicit package reference (e.g., "com.jangabrielsson.gauge/gauge")
+                    configDevice.widget = newType;
+                    device.widget = newType;
+                    // Extract the widget ID part for type
+                    actualType = newType.split('/')[1];
+                } else {
+                    // Simple widget type - remove any existing widget reference
+                    delete configDevice.widget;
+                    delete device.widget;
+                }
+                
+                const typeChanged = configDevice.type !== actualType;
                 
                 configDevice.name = newName;
-                configDevice.type = newType;
+                configDevice.type = actualType;
                 device.name = newName;
-                device.type = newType;
+                device.type = actualType;
                 
                 // Update floor assignments
                 const currentFloors = this.app.getDeviceFloors(device);

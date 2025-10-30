@@ -58,6 +58,13 @@ export class EventManager {
         
         while (this.isPolling) {
             try {
+                // Check if auth is locked before attempting API call
+                if (this.homeMap.hc3ApiManager.isAuthLocked()) {
+                    console.log('Auth locked, stopping event polling');
+                    this.stopEventPolling();
+                    break;
+                }
+
                 const url = `${config.protocol}://${config.host}/api/refreshStates?last=${this.lastEventId}&timeout=30`;
                 
                 const response = await http.fetch(url, {
@@ -69,6 +76,14 @@ export class EventManager {
                 });
 
                 if (!response.ok) {
+                    // Check for authentication failures
+                    if (response.status === 401 || response.status === 403) {
+                        console.error('Event polling auth failure:', response.status);
+                        await this.homeMap.hc3ApiManager.handleAuthFailure(response.status);
+                        this.stopEventPolling();
+                        break;
+                    }
+
                     console.error('Event polling failed:', response.status);
                     await new Promise(resolve => setTimeout(resolve, 5000));
                     continue;
