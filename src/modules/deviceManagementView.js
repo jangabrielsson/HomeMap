@@ -24,7 +24,7 @@ export class DeviceManagementView {
             console.log(`Loaded ${this.hc3Devices.length} HC3 devices`);
 
             // Create panel
-            this.createPanel();
+            await this.createPanel();
             
             // Show panel with animation
             setTimeout(() => {
@@ -40,12 +40,35 @@ export class DeviceManagementView {
     /**
      * Create the device management panel
      */
-    createPanel() {
+    async createPanel() {
         this.panel = document.createElement('div');
         this.panel.className = 'device-management-panel';
         this.panel.id = 'deviceManagementPanel';
 
-        const availableWidgets = Object.keys(this.app.widgetManager.widgets).sort();
+        // Get available widgets from package manager (same as dialog does)
+        const packageManager = this.app.widgetManager.packageManager;
+        const builtInWidgets = await packageManager.discoverBuiltInWidgets();
+        
+        // Create widget options array with display names and values
+        const widgetOptions = builtInWidgets.map(w => ({
+            value: w.id,
+            display: `${w.id} (com.fibaro.built-in)`
+        }));
+        
+        // Add widgets from installed packages
+        if (packageManager.installedPackages?.packages) {
+            for (const [packageId, packageInfo] of Object.entries(packageManager.installedPackages.packages)) {
+                for (const widgetId of packageInfo.manifest.provides.widgets) {
+                    widgetOptions.push({
+                        value: `${packageId}/${widgetId}`,
+                        display: `${widgetId} (${packageId})`
+                    });
+                }
+            }
+        }
+        
+        console.log('Available widgets for device management:', widgetOptions);
+        
         const floors = this.app.homemapConfig.floors;
 
         // Build device list
@@ -122,8 +145,8 @@ export class DeviceManagementView {
                                     <div class="device-selector-group">
                                         <label>Widget:</label>
                                         <select class="device-widget-select" data-index="${index}">
-                                            ${availableWidgets.map(w => 
-                                                `<option value="${w}" ${w === row.widget ? 'selected' : ''}>${w}</option>`
+                                            ${widgetOptions.map(w => 
+                                                `<option value="${w.value}" ${w.value === row.widget ? 'selected' : ''}>${w.display}</option>`
                                             ).join('')}
                                         </select>
                                     </div>

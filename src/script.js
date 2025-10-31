@@ -558,8 +558,11 @@ You can also configure floor plans and manage devices once connected!`;
             // Update window title and header
             await this.updateAppTitle();
             
-            // Load widget definitions
+            // Load widget definitions for devices
             await this.loadWidgets();
+            
+            // Also load all available widgets for device management dropdowns
+            await this.widgetManager.loadAllAvailableWidgets();
             
             this.floorManager.renderFloors();
             

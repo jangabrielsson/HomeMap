@@ -162,6 +162,56 @@ export class WidgetManager {
     }
 
     /**
+     * Load all available widgets from built-in and packages
+     * This is used to populate widget dropdowns even when no devices are configured yet
+     */
+    async loadAllAvailableWidgets() {
+        try {
+            // Load built-in widgets
+            const builtInPath = `${this.dataPath}/widgets/built-in`;
+            try {
+                const files = await this.invoke('list_directory', { path: builtInPath });
+                console.log('Found built-in widget files:', files);
+                
+                for (const file of files) {
+                    if (file.endsWith('.json')) {
+                        const widgetType = file.replace('.json', '');
+                        if (!this.widgets[widgetType]) {
+                            try {
+                                const jsonContent = await this.invoke('read_widget_json', { widgetType });
+                                const widget = JSON.parse(jsonContent);
+                                widget._package = 'com.fibaro.built-in';
+                                
+                                // Load icon set if specified
+                                if (widget.iconSet) {
+                                    widget.iconSetMap = await this.loadIconSet(widget.iconSet, widget._package);
+                                } else if (widget.render?.icon?.set) {
+                                    widget.iconSetMap = await this.loadIconSet(widget.render.icon.set, widget._package);
+                                }
+                                
+                                this.widgets[widgetType] = widget;
+                                console.log(`Loaded built-in widget: ${widgetType}`);
+                            } catch (error) {
+                                console.warn(`Failed to load widget ${widgetType}:`, error);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load built-in widgets:', error);
+            }
+            
+            // TODO: Also load package widgets when packages are supported
+            
+            console.log(`Total widgets available: ${Object.keys(this.widgets).length}`);
+            return this.widgets;
+        } catch (error) {
+            console.error('Failed to load available widgets:', error);
+            return this.widgets;
+        }
+    }
+
+    /**
      * Get a specific widget definition
      */
     getWidget(type) {

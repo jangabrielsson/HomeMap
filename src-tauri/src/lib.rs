@@ -524,8 +524,17 @@ fn read_file_as_text(file_path: String) -> Result<String, String> {
 #[tauri::command]
 fn read_widget_json(widget_type: String) -> Result<String, String> {
     let homemap_path = get_homemap_data_path()?;
-    let widget_path = homemap_path.join("widgets").join(format!("{}.json", widget_type));
     
+    // Try built-in folder first
+    let widget_path_builtin = homemap_path.join("widgets").join("built-in").join(format!("{}.json", widget_type));
+    if widget_path_builtin.exists() {
+        let content = fs::read_to_string(&widget_path_builtin)
+            .map_err(|e| format!("Failed to read widget file: {}", e))?;
+        return Ok(content);
+    }
+    
+    // Fallback to root widgets folder (legacy)
+    let widget_path = homemap_path.join("widgets").join(format!("{}.json", widget_type));
     let content = fs::read_to_string(&widget_path)
         .map_err(|e| format!("Failed to read widget file: {}", e))?;
     
