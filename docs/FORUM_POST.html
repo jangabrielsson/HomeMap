@@ -28,14 +28,17 @@
 <ul>
 <li><strong>📍 Interactive Floor Plans</strong> - Display devices on custom floor plan images</li>
 <li><strong>🔄 Real-time Updates</strong> - Live device status using HC3 event polling</li>
-<li><strong>🎨 Flexible Widget System</strong> - JSON-based device definitions with valuemaps</li>
-<li><strong>✏️ Edit Mode</strong> - Drag-and-drop device repositioning with auto-save</li>
-<li><strong>🏷️ Multiple Device Types</strong> - Lights, dimmers, temperature sensors, motion sensors</li>
+<li><strong>🎨 Flexible Widget System</strong> - JSON-based device definitions with built-in widgets</li>
+<li><strong>✏️ Edit Mode</strong> - Drag-and-drop device positioning with auto-save</li>
+<li><strong>🖼️ Floor Management</strong> - Add/edit/delete floors via UI with image preview</li>
+<li><strong>📱 Device Management</strong> - Install/uninstall devices with visual side panel</li>
+<li><strong>⚙️ Settings Dialog</strong> - Configure HC3, house name, floors - all from the UI</li>
+<li><strong>🏷️ Multiple Device Types</strong> - Lights, dimmers, temperature sensors, motion sensors, and more</li>
 <li><strong>⚡ Fast Event Handling</strong> - Dispatch table architecture for O(1) event processing</li>
 <li><strong>🔧 DevTools</strong> - Built-in developer tools (Cmd+Shift+I)</li>
 <li><strong>🔄 Auto-Updates</strong> - Automatic update checking and installation</li>
 <li><strong>🎯 Multi-Floor Support</strong> - Tab-based navigation between floors</li>
-<li><strong>📁 Easy Setup</strong> - Built-in configuration wizard</li>
+<li><strong>📁 Zero Configuration</strong> - Works out of the box, auto-creates needed folders</li>
 </ul>
 
 <hr>
@@ -71,16 +74,51 @@
 
 <h3>Quick Setup</h3>
 
-<p><strong>1. Create configuration folder</strong></p>
+<p>HomeMap is designed to work out of the box! On first launch:</p>
+
+<p><strong>1. Automatic Setup</strong></p>
 <ul>
-<li>Menu → HomeMap → Create Configuration...</li>
-<li>Select a location (e.g., Documents or Desktop)</li>
-<li>A <code>homemapdata</code> folder will be created with templates</li>
+<li>The app automatically creates a configuration folder</li>
+<li>All required files and built-in widgets are installed automatically</li>
+<li>No manual folder creation needed!</li>
 </ul>
 
-<p><strong>2. Set up HC3 credentials</strong></p>
+<p><strong>2. Configure HC3 Connection</strong></p>
+<ul>
+<li>Click the Settings button (⚙️) in the top-right corner</li>
+<li>Enter your HC3 credentials:
+  <ul>
+    <li>IP Address or Hostname</li>
+    <li>Username</li>
+    <li>Password</li>
+    <li>Protocol (http or https)</li>
+  </ul>
+</li>
+<li>Optionally: Set your house name and icon (emoji)</li>
+</ul>
 
-<p>Create a <code>.env</code> file in your home directory:</p>
+<p><strong>3. Set Up Your Floor Plans</strong></p>
+<ul>
+<li>Click the Settings button (⚙️) → Floors tab</li>
+<li>Add floors by selecting floor plan images</li>
+<li>The app automatically detects dimensions and maintains aspect ratios</li>
+<li>Arrange floors with Move Up/Down buttons</li>
+</ul>
+
+<p><strong>4. Add Your Devices</strong></p>
+<ul>
+<li>Turn on Edit Mode (toggle in top bar)</li>
+<li>Open the Device Management panel (☰ button)</li>
+<li>Select devices from your HC3 system</li>
+<li>Choose widget type and floor for each device</li>
+<li>Click Install to add devices to your floor plan</li>
+<li>Drag devices to position them on your floor plan</li>
+</ul>
+
+<p><strong>That's it!</strong> No manual file editing required. The app handles all configuration through its UI.</p>
+
+<p><strong>Advanced: Custom .env Configuration (Optional)</strong></p>
+<p>For development or if you prefer environment variables, create a <code>.env</code> file in your home directory:</p>
 <ul>
 <li><strong>macOS:</strong> <code>~/.env</code></li>
 <li><strong>Windows:</strong> <code>C:\Users\YourUsername\.env</code></li>
@@ -90,19 +128,9 @@
 <pre><code>HC3_HOST=192.168.1.57
 HC3_USER=admin
 HC3_PASSWORD=your-password
-HC3_PROTOCOL=http
-HC3_HOMEMAP=/path/to/homemapdata</code></pre>
+HC3_PROTOCOL=http</code></pre>
 
-<p><em>Note: If your password contains special characters like $, ", ', or spaces, do NOT quote it - just write it as-is.</em></p>
-
-<p><strong>3. Customize your setup</strong></p>
-<ul>
-<li>Add floor plan images to <code>homemapdata/images/</code></li>
-<li>Edit <code>homemapdata/config.json</code> with your devices</li>
-<li>Add device icons to <code>homemapdata/icons/</code></li>
-</ul>
-
-<p>See <a href="https://github.com/jangabrielsson/HomeMap/blob/main/CONFIGURE.md">CONFIGURE.md</a> for complete configuration guide.</p>
+<p><em>Note: Settings configured in the app UI take priority over .env file values.</em></p>
 
 <hr>
 
@@ -122,7 +150,13 @@ HC3_HOMEMAP=/path/to/homemapdata</code></pre>
 
 <h2>🎨 Widget System</h2>
 
-<p>HomeMap uses a flexible JSON-based widget system. Each widget defines:</p>
+<p>HomeMap uses a flexible JSON-based widget system. Built-in widgets are provided for common device types and automatically synced on startup.</p>
+
+<p><strong>For End Users:</strong> All built-in widgets work out of the box! Simply select a device in the Device Management panel, choose the appropriate widget type, and install it.</p>
+
+<p><strong>For Developers:</strong> Custom widgets and icons can be added to the <code>homemapdata/widgets/packages/</code> and <code>homemapdata/icons/packages/</code> folders. The <code>built-in/</code> folders are automatically synced and should not be edited.</p>
+
+<p>Each widget defines:</p>
 <ul>
 <li><strong>State:</strong> Device properties to track</li>
 <li><strong>Events:</strong> JSONPath patterns for HC3 event matching</li>
@@ -202,11 +236,16 @@ HC3_HOMEMAP=/path/to/homemapdata</code></pre>
 
 <h2>📚 Documentation</h2>
 
-<p>Comprehensive guides are available:</p>
+<p><strong>For Users:</strong></p>
 <ul>
 <li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/CONFIGURE.md">CONFIGURE.md</a></strong> - Complete configuration guide</li>
-<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/WIDGET_FORMAT.md">WIDGET_FORMAT.md</a></strong> - Widget JSON format specification and examples</li>
 <li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/CHANGELOG.md">CHANGELOG.md</a></strong> - Version history and changes</li>
+</ul>
+
+<p><strong>For Developers:</strong></p>
+<ul>
+<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/CUSTOM_ICONS.md">CUSTOM_ICONS.md</a></strong> - Creating custom icons</li>
+<li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/WIDGET_FORMAT.md">WIDGET_FORMAT.md</a></strong> - Widget JSON format specification</li>
 <li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/DEVELOPMENT.md">DEVELOPMENT.md</a></strong> - Development setup guide</li>
 <li><strong><a href="https://github.com/jangabrielsson/HomeMap/blob/main/docs/DEV_GUIDE.md">DEV_GUIDE.md</a></strong> - Development patterns</li>
 </ul>

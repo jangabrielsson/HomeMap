@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed device editing error: `loadDevices is not a function` 
+  - Changed to correct method name `loadWidgets()`
+  - Device editing and type changes now work properly
+- Fixed device deletion error: `renderFloors is not a function`
+  - Changed to correct path `floorManager.renderFloors()`
+  - Device deletion now works without errors
+
+## [0.1.19] - 2025-10-31
+
+### Fixed
+- **Critical Production Bug**: Fixed template discovery in production builds
+  - Template folder now correctly found in bundled app resources (`_up_` folder)
+  - New users can now successfully initialize app on first launch
+  - Resolved "Could not find homemapdata.example template folder" error
+
+### Changed
+- Removed dummy device (ID 123) from example configuration
+- Removed obsolete "Create Configuration..." menu item (auto-init handles this now)
+
+### Added
+- Welcome dialog for first-time users without configured HC3 credentials
+  - Friendly guidance to configure settings
+  - App loads UI without requiring immediate HC3 connection
+
 ## [0.1.18] - 2025-10-31
 
 ### Added

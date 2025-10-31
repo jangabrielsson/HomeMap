@@ -47,33 +47,52 @@ Download the latest release for your platform from the [Releases](https://github
 
 ### Quick Setup
 
-1. **Create configuration folder**
-   - Menu → HomeMap → Create Configuration...
-   - Select a location (e.g., Documents or Desktop)
-   - A `homemapdata` folder will be created with templates
+HomeMap is designed to work out of the box! On first launch:
 
-3. **Set up HC3 credentials**
+1. **Automatic Setup**
+   - The app automatically creates a configuration folder: `~/Library/Application Support/HomeMap/homemapdata` (macOS)
+   - All required files and built-in widgets are installed automatically
 
-   Create a `.env` file in your home directory:
-   - **macOS**: `~/.env`
-   - **Windows**: `C:\Users\YourUsername\.env`
+2. **Configure HC3 Connection**
+   - Click the Settings button (⚙️) in the top-right corner
+   - Enter your HC3 credentials:
+     - IP Address or Hostname
+     - Username
+     - Password
+     - Protocol (http or https)
+   - Optionally: Set your house name and icon (emoji)
 
-   ```bash
-   HC3_HOST=192.168.1.57
-   HC3_USER=admin
-   HC3_PASSWORD=your-password
-   HC3_PROTOCOL=http
-   HC3_HOMEMAP=/path/to/homemapdata
-   ```
+3. **Set Up Your Floor Plans**
+   - Click the Settings button (⚙️) → Floors tab
+   - Add floors by selecting floor plan images
+   - The app automatically detects dimensions and maintains aspect ratios
+   - Arrange floors with Move Up/Down buttons
 
-   **Note:** If your password contains special characters like `$`, `"`, `'`, or spaces, do NOT quote it - just write it as-is.
+4. **Add Your Devices**
+   - Turn on Edit Mode (toggle in top bar)
+   - Open the Device Management panel (☰ button)
+   - Select devices from your HC3 system
+   - Choose widget type and floor for each device
+   - Click Install to add devices to your floor plan
+   - Drag devices to position them on your floor plan
 
-4. **Customize your setup**
-   - Add floor plan images to `homemapdata/images/`
-   - Edit `homemapdata/config.json` with your devices
-   - Add device icons to `homemapdata/icons/`
+That's it! No manual file editing required. The app handles all configuration through its UI.
 
-See [CONFIGURE.md](CONFIGURE.md) for complete configuration guide.
+### Advanced: Custom .env Configuration (Optional)
+
+For development or if you prefer environment variables, create a `.env` file in your home directory:
+
+- **macOS**: `~/.env`
+- **Windows**: `C:\Users\YourUsername\.env`
+
+```bash
+HC3_HOST=192.168.1.57
+HC3_USER=admin
+HC3_PASSWORD=your-password
+HC3_PROTOCOL=http
+```
+
+**Note:** Settings configured in the app UI take priority over `.env` file values.
 
 ## Updates
 
@@ -88,15 +107,41 @@ Updates are downloaded from the [GitHub Releases](https://github.com/jangabriels
 
 ## Widget System
 
-HomeMap uses a flexible JSON-based widget system. Each widget defines:
+HomeMap uses a flexible JSON-based widget system. Built-in widgets are provided for common device types (lights, sensors, switches, etc.), and they're automatically synced on startup.
 
-- **State**: Device properties to track
-- **Events**: JSONPath patterns for HC3 event matching
-- **Render**: Icon sets, badges, and dynamic styling
-- **Actions**: HC3 API calls for device control
-- **UI**: Interactive dialogs for device control
+### For End Users
+
+All built-in widgets work out of the box! Simply:
+1. Select a device in the Device Management panel
+2. Choose the appropriate widget type (e.g., "light" for lights)
+3. Install the device on your floor plan
+
+The app handles everything automatically.
+
+### For Developers: Custom Widgets and Icons
+
+If you want to create custom widgets or icons, you can work directly with the `homemapdata` folder:
+
+**Location:** `~/Library/Application Support/HomeMap/homemapdata` (macOS)
+
+**Structure:**
+```
+homemapdata/
+├── widgets/
+│   ├── built-in/        # Auto-synced from app (don't edit)
+│   └── packages/        # Your custom widgets go here
+├── icons/
+│   ├── built-in/        # Auto-synced from app (don't edit)
+│   └── packages/        # Your custom icons go here
+├── images/              # Floor plan images
+└── config.json          # Main configuration
+```
+
+**Important:** The `built-in/` folders are automatically synced from the app on startup. Any changes will be overwritten. Place custom content in the `packages/` folders.
 
 ### Custom Icons
+
+You can use custom icons with any widget by specifying device-level parameters:
 
 You can use custom icons with any widget by specifying device-level parameters. This allows you to:
 
@@ -117,11 +162,11 @@ You can use custom icons with any widget by specifying device-level parameters. 
 }
 ```
 
-Place your custom icons in `homemapdata/icons/myCustomLights/` and the device will use them instead of the widget's default icons. See **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** for complete guide.
+Place your custom icons in `homemapdata/icons/packages/myCustomLights/` and the device will use them instead of the widget's default icons. See **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** for complete guide.
 
 ### Widget Definition Example
 
-Example widget definition:
+For developers creating custom widgets, each widget is a JSON file that defines:
 
 ```json
 {
@@ -170,6 +215,13 @@ Example widget definition:
 }
 ```
 
+**Widget Components:**
+- **State**: Device properties to track
+- **Events**: JSONPath patterns for HC3 event matching
+- **Render**: Icon sets, badges, and dynamic styling
+- **Actions**: HC3 API calls for device control
+- **UI**: Interactive dialogs for device control
+
 **Advanced Features (v0.1.7+):**
 - Expression evaluation in templates (`${value * 1.8 - 90}`)
 - SVG manipulation for dynamic graphics
@@ -178,6 +230,16 @@ Example widget definition:
 - Dynamic styling for colored effects
 
 See [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md) for complete specification and examples.
+
+## Configuration Files (Advanced)
+
+While the UI handles most configuration, advanced users can directly edit configuration files in the `homemapdata` folder:
+
+- **config.json** - Main configuration (floors, devices, house settings)
+- **widget-mappings.json** - HC3 type to widget mappings
+- **installed-packages.json** - Installed widget/icon packages
+
+**Note:** It's recommended to use the UI whenever possible. Direct file editing is primarily for development and advanced customization.
 
 ## Development
 
@@ -205,10 +267,13 @@ cargo tauri build
 
 Comprehensive guides are available in the [`docs/`](docs/) directory:
 
+**For Users:**
 - **[CONFIGURE.md](CONFIGURE.md)** - Complete configuration guide (widgets, icons, actions, floor plans)
-- **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** - Using custom icons with built-in widgets
-- **[docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)** - Widget JSON format specification and examples
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history and changes
+
+**For Developers:**
+- **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** - Creating custom icons for widgets
+- **[docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)** - Widget JSON format specification and examples
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development setup guide
 - **[docs/DEV_GUIDE.md](docs/DEV_GUIDE.md)** - Development patterns and best practices
 - **[docs/UPDATER_SETUP.md](docs/UPDATER_SETUP.md)** - Auto-updater configuration

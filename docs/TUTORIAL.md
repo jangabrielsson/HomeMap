@@ -40,64 +40,48 @@ HomeMap is a visual interface for your Fibaro HC3 home automation system. Instea
 
 ### 2.1 First Launch
 
-When you first open HomeMap, you'll see a connection status at the top right. If it says "Configuration Error", you need to set up your HC3 connection.
+When you first open HomeMap:
+- The app automatically creates a configuration folder
+- Built-in widgets and icons are installed automatically
+- You'll see a welcome dialog guiding you to set up your HC3 connection
 
 ### 2.2 Opening Settings
 
-Click the **⚙️ Settings** button in the top left corner.
+Click the **⚙️ Settings** button in the top-right corner.
 
 ### 2.3 Configure HC3 Connection
 
-In the Settings panel, fill in:
+In the Settings dialog, go to the **HC3** tab and fill in:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| **HC3 Host** | Your HC3's IP address | `192.168.1.57` |
+| **HC3 Host** | Your HC3's IP address or hostname | `192.168.1.57` |
 | **HC3 Username** | Your HC3 username | `admin` |
 | **HC3 Password** | Your HC3 password | Your password |
 | **Protocol** | HTTP or HTTPS | `http` (most common) |
 
-### 2.4 Set Data Path
+### 2.4 Optional: Configure House Settings
 
-The **HomeMap Data Path** is where your configuration and floor plans are stored.
+In the **General** tab, you can set:
+- **House Name**: Display name for your home (shows in window title)
+- **House Icon**: An emoji icon for branding (max 2 characters)
 
-**Default location:**
-```
-/Users/YourName/Desktop/Fibaro/HomeMap/homemapdata
-```
+These are optional but make HomeMap feel more personalized!
 
-**Option 1: Use "Create Configuration" (Easiest)**
-
-If the folder doesn't exist yet, HomeMap can create it for you:
-
-1. Go to menu bar → **File** → **Create Configuration**
-2. Choose where you want the folder
-3. HomeMap creates the folder and a basic `config.json` file
-4. The path is automatically set in Settings
-
-**Option 2: Choose Existing Folder**
-
-If you already have a data folder:
-
-1. Click **Browse...** to choose the folder
-2. Or type the path manually
-3. Make sure the folder contains (or will contain) `config.json`
-
-**Option 3: Use Default Location**
-
-Leave the default path as-is if you want to use:
-```
-/Users/YourName/Desktop/Fibaro/HomeMap/homemapdata
-```
-Just make sure the folder exists before restarting.
-
-### 2.5 Save and Restart
+### 2.5 Save and Test Connection
 
 1. Click **Save**
-2. Restart HomeMap when prompted
-3. You should now see "Connected to HC3" (green dot) at the top right
+2. The app automatically tests your connection
+3. You should see "Connected to HC3" (green indicator) at the top right
 
 > **Tip:** If you see "Authentication Failed", double-check your username and password!
+
+**Where are files stored?**
+HomeMap automatically creates its configuration folder at:
+- **macOS**: `~/Library/Application Support/HomeMap/homemapdata`
+- **Windows**: `%APPDATA%\HomeMap\homemapdata`
+
+You don't need to worry about this unless you want to create custom widgets or icons!
 
 ---
 
@@ -113,49 +97,44 @@ Just make sure the folder exists before restarting.
 
 **Where to put them:**
 Place your floor plan images in your data folder:
-```
-/path/to/homemapdata/floor1.png
-/path/to/homemapdata/floor2.png
-```
+## 3. Adding Floor Plans
 
-### 3.2 Edit config.json
+### 3.1 Prepare Your Floor Plan Image
 
-Open the configuration file:
-```
-/path/to/homemapdata/config.json
-```
+1. Create or obtain a floor plan image (PNG, JPG, or GIF)
+2. Name it something descriptive like `ground-floor.png` or `first-floor.jpg`
+3. Recommended size: 1500-3000 pixels wide for best quality
 
-Add your floors to the `floors` array:
+### 3.2 Add Floor via Settings
 
-```json
-{
-  "floors": [
-    {
-      "id": "floor1",
-      "name": "Ground Floor",
-      "image": "floor1.png"
-    },
-    {
-      "id": "floor2",
-      "name": "First Floor",
-      "image": "floor2.png"
-    }
-  ],
-  "devices": []
-}
-```
+1. Open **Settings** (⚙️)
+2. Go to the **Floors** tab
+3. Click **Add Floor**
+4. Fill in the floor information:
 
-**Field explanations:**
-- `id`: Unique identifier (use simple names like "floor1", "floor2")
-- `name`: Display name shown in tabs
-- `image`: Filename of your floor plan image
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Floor ID** | Unique identifier (simple name) | `floor1` |
+| **Floor Name** | Display name | `Ground Floor` |
+| **Floor Image** | Click **Browse...** to select your image | `ground-floor.png` |
 
-### 3.3 Reload HomeMap
+5. Click **Save**
+6. The floor appears in your floor tabs
 
-After editing `config.json`:
-1. Save the file
-2. Restart HomeMap
-3. You should see tabs for each floor at the top
+**The floor image is automatically copied to your data folder**, so you don't need to worry about file paths!
+
+### 3.3 Verify the Floor
+
+You should now see your new floor as a tab at the top of the window.
+
+Click on the tab to view the floor plan!
+
+### 3.4 Add More Floors
+
+Repeat the process for additional floors:
+- **Ground Floor** (id: `floor1`)
+- **First Floor** (id: `floor2`)
+- **Basement** (id: `basement`)
 
 > **Tip:** Start with one floor to get familiar with HomeMap, then add more floors later!
 
@@ -163,50 +142,59 @@ After editing `config.json`:
 
 ## 4. Adding Devices
 
-There are two ways to add devices: manually editing config.json, or using the visual editor (much easier!).
+There are two ways to add devices to your floor plans:
 
-### 4.1 Using the Visual Editor (Recommended)
+### 4.1 Using Device Management Panel (Recommended)
 
-**Step 1: Enable Edit Mode**
+This is the **easiest and most visual way** to add devices.
 
-At the top right, check the **Edit Mode** checkbox.
+**Step 1: Enter Edit Mode**
+1. Click the **Edit** button (✏️) at the top right
+2. The floor plan enters edit mode (you'll see editing controls)
 
-**Step 2: Right-Click on Floor Plan**
+**Step 2: Open Device Management**
+1. Click the **hamburger menu (☰)** at the top left
+2. Select **Device Management**
 
-Right-click where you want to place a device on your floor plan, then select **Add Device**.
+**Step 3: Install a Device**
+1. The panel shows all your HC3 devices organized by room
+2. Find the device you want to add
+3. Click **Install** next to the device
+4. The device appears on your floor plan!
 
-**Step 3: Fill in Device Information**
+**Step 4: Position the Device**
+1. **Drag** the device to the correct location on your floor
+2. Devices snap to a grid for easier alignment
+3. The device automatically uses the appropriate widget based on its type
+4. Click **Exit Edit Mode** when done
 
-A dialog will appear asking for:
-
-| Field | What to Enter |
-|-------|---------------|
-| **Device ID** | The ID from your HC3 (e.g., `385`) |
-| **Name** | A friendly name (e.g., "Living Room Light") |
-| **Type** | The widget type (e.g., `lightdim`, `binarysensor`) |
-| **Floors** | Check which floors this device appears on |
-
-**Step 4: Click "Add Device"**
-
-The device will appear on your floor plan! A small icon represents the device at the position where you right-clicked.
+> **Tip:** The Device Management panel groups devices by room, making it easy to find what you need!
 
 ### 4.2 Common Widget Types
 
-| Device Type | Widget Type |
-|-------------|-------------|
-| Dimmable Light | `lightdim` |
-| On/Off Light | `binaryswitch` |
-| Door/Window Sensor | `binarysensor` |
-| Motion Sensor | `motion` |
-| Temperature Sensor | `temperature` |
-| Multi-level Sensor | `multilevel` |
-| Colored Light | `lightcolor` |
+HomeMap automatically selects the right widget based on your HC3 device type:
+
+| Device Type | Widget Type | Controls |
+|-------------|-------------|----------|
+| Dimmable Light | `lightdim` | On/Off + Brightness slider |
+| On/Off Light | `binaryswitch` | On/Off button |
+| Door/Window Sensor | `binarysensor` | Open/Closed status |
+| Motion Sensor | `motion` | Motion detected indicator |
+| Temperature Sensor | `temperature` | Current temperature |
+| Multi-level Sensor | `multilevel` | Sensor value display |
+| Colored Light | `lightcolor` | On/Off + Color picker |
 
 > **Where to find Device ID:** In the HC3 web interface, go to Devices, and look at the device details. The ID is shown in the URL or device info.
 
-### 4.3 Manual Method (config.json)
+### 4.3 Advanced: Manual Configuration (config.json)
 
-If you prefer editing the config file directly:
+For developers or advanced users who want direct file control:
+
+Open your configuration file at:
+- **macOS**: `~/Library/Application Support/HomeMap/homemapdata/config.json`
+- **Windows**: `%APPDATA%\HomeMap\homemapdata\config.json`
+
+Add devices manually:
 
 ```json
 {
@@ -231,6 +219,8 @@ If you prefer editing the config file directly:
 - Add a device visually to see where it lands
 - Check config.json to see the coordinates
 - Use those coordinates for other devices
+
+> **Note:** Using the Device Management panel is much easier and less error-prone!
 
 ---
 
@@ -408,61 +398,64 @@ Zoom settings are saved even when you close HomeMap.
 
 ### Backup Your Configuration
 
-Your configuration is in one file:
-```
-/path/to/homemapdata/config.json
-```
+Your configuration is automatically stored in:
+- **macOS**: `~/Library/Application Support/HomeMap/homemapdata/`
+- **Windows**: `%APPDATA%\HomeMap\homemapdata\`
 
 **To backup:**
-1. Copy `config.json` to a safe location
-2. Also copy your floor plan images
+1. Copy the entire `homemapdata` folder to a safe location
+2. This includes `config.json` and all your floor plan images
 3. Keep backups before making major changes
 
 **To restore:**
-1. Copy the backup `config.json` back
+1. Copy the backup `homemapdata` folder back to the app support location
 2. Restart HomeMap
 
 ### When Things Go Wrong
 
 **HomeMap won't start:**
-- Check that config.json is valid JSON (use a JSON validator online)
-- Make sure floor plan images exist in the data folder
-- Check the console for error messages
+- Check the console/terminal for error messages
+- Try resetting to defaults by temporarily moving the `homemapdata` folder
+- Reinstall if needed (your data folder is preserved)
 
 **Can't connect to HC3:**
-- Verify IP address is correct
+- Verify IP address in Settings → HC3 tab
 - Check username and password
 - Make sure HC3 is powered on and accessible
 - Try accessing HC3 web interface in a browser
 
 **Devices not appearing:**
-- Check device ID is correct
-- Verify widget type matches device type
+- Check device ID is correct in HC3
 - Make sure device is enabled in HC3
-- Check that position is within floor plan bounds
+- Try uninstalling and reinstalling the device via Device Management panel
+- Check that the device is visible on the current floor
 
 **Floor plans not loading:**
-- Verify image files exist in data folder
-- Check file names match config.json exactly
-- Try PNG format if other formats don't work
-- Make sure file paths have no spaces or special characters
+- Make sure you selected a valid image file (PNG, JPG, or GIF)
+- Try re-adding the floor via Settings → Floors tab
+- Check that the image file isn't corrupted
+- Try a different image format if needed
 
 ### Getting Help
 
 **Resources:**
-- Check the [Configuration Guide](CONFIGURE.md) for detailed options
-- See [Widget Format](WIDGET_FORMAT.md) for custom widgets
-- Review example config files in the examples folder
+- Check the [README](../README.md) for feature overview
+- See the [Forum Post](FORUM_POST.html) for community discussion
+- Review [Configuration Guide](CONFIGURE.md) for advanced options (developers)
+- See [Widget Format](WIDGET_FORMAT.md) for custom widget development
 
 **Common Questions:**
 - **Q: Can I use HomeMap on multiple computers?**
-  - A: Yes! Just point each HomeMap to the same data folder (use a shared drive or cloud storage)
+  - A: Yes! The configuration folder can be synced via cloud storage, or you can export/import by copying the `homemapdata` folder
   
 - **Q: How do I add custom widgets?**
-  - A: See the Widget Format documentation (advanced topic)
+  - A: See the Widget Format documentation - place custom widgets in `homemapdata/widgets/packages/`
   
 - **Q: Can I export my configuration?**
-  - A: Just copy your `config.json` file and floor plan images
+  - A: Yes! Copy your entire `homemapdata` folder (found in Application Support) to backup or share
+  
+- **Q: Do I need to manually edit config files?**
+  - A: No! HomeMap is designed to be fully configurable through the UI. Direct file editing is only for advanced customization.
 
 ---
 
@@ -470,24 +463,25 @@ Your configuration is in one file:
 
 Ready to get started? Follow this checklist:
 
-- [ ] Open Settings and enter HC3 credentials
-- [ ] Set your data path and create the folder
-- [ ] Save settings and restart HomeMap
-- [ ] Verify "Connected to HC3" appears (green dot)
-- [ ] Copy a floor plan image to your data folder
-- [ ] Edit `config.json` to add your first floor
-- [ ] Restart HomeMap to see the floor tab
-- [ ] Enable Edit Mode
-- [ ] Right-click on floor plan → Add Device
-- [ ] Enter device ID, name, and type
-- [ ] Click Add Device
-- [ ] Try clicking the device (with Edit Mode OFF) to control it
-- [ ] Try dragging the device to move it (with Edit Mode ON)
-- [ ] Use zoom controls to adjust the view
-- [ ] Add more devices and enjoy!
+- [ ] Launch HomeMap (configuration folder created automatically)
+- [ ] Open Settings (⚙️) and go to HC3 tab
+- [ ] Enter your HC3 credentials (IP, username, password)
+- [ ] Save settings and verify "Connected to HC3" appears (green dot)
+- [ ] Go to Settings → Floors tab
+- [ ] Click "Add Floor" and select your floor plan image
+- [ ] Fill in floor name and ID, click Save
+- [ ] Close Settings and verify you see your floor tab
+- [ ] Click Edit Mode (✏️)
+- [ ] Open hamburger menu (☰) → Device Management
+- [ ] Find a device and click "Install"
+- [ ] Drag the device to position it on your floor plan
+- [ ] Exit Edit Mode
+- [ ] Try clicking the device to control it
+- [ ] Use zoom controls (in Edit Mode) to adjust the view
+- [ ] Add more devices and floors as needed!
 
 ---
 
-**Congratulations!** You're now ready to use HomeMap. Start simple, experiment, and gradually add more devices and floors as you get comfortable with the interface.
+**Congratulations!** You're now ready to use HomeMap. The app handles all file management automatically - just use the interface to set up your floors and devices!
 
 **Happy Home Mapping! 🏠**

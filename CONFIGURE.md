@@ -2,47 +2,67 @@
 
 This guide explains how to configure HomeMap for your home automation system.
 
+> **For End Users**: HomeMap is designed to work through the UI! This guide is primarily for **developers** who want to customize widgets or understand the file structure.
+
 **Note**: For detailed widget format documentation, see [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
+- [Quick Start (UI Method)](#quick-start-ui-method)
 - [Configuration File Structure](#configuration-file-structure)
 - [Floor Plans](#floor-plans)
 - [Devices](#devices)
 - [Widget System](#widget-system)
 - [Icons](#icons)
 - [Examples](#examples)
+- [Advanced: Manual Configuration](#advanced-manual-configuration)
 
-## Quick Start
+## Quick Start (UI Method)
 
-1. **Use Settings Panel** (Recommended):
-   - Click the cogwheel (⚙️) button in the app
-   - Configure HC3 host, credentials, and HomeMap data directory
-   - Settings are saved to `.env` file automatically
+**Recommended for all users:**
 
-2. **Or Edit .env Manually**:
-   ```bash
-   HC3_HOST=192.168.1.100
-   HC3_USER=admin
-   HC3_PASSWORD=yourpassword
-   HC3_PROTOCOL=http
-   HC3_HOMEMAP=/path/to/homemapdata
-   ```
+1. **Launch HomeMap**:
+   - Configuration folder is created automatically
+   - Built-in widgets and icons are installed automatically
 
-3. **Add Devices Visually**:
-   - Enable Edit Mode (toggle at top of app)
-   - Right-click on floor plan to add device
-   - Right-click on device to edit or delete
-   - Drag devices to reposition
+2. **Configure HC3 Connection**:
+   - Click Settings (⚙️) → HC3 tab
+   - Enter your HC3 host, username, and password
+   - Click Save
+
+3. **Add Floor Plans**:
+   - Settings (⚙️) → Floors tab
+   - Click "Add Floor"
+   - Select your floor plan image
+   - Enter floor name and ID
+   - Click Save
+
+4. **Add Devices**:
+   - Click Edit Mode (✏️)
+   - Click hamburger menu (☰) → Device Management
+   - Find your device and click "Install"
+   - Drag to position on floor plan
+   - Exit Edit Mode
+
+**Files are stored automatically at:**
+- **macOS**: `~/Library/Application Support/HomeMap/homemapdata/`
+- **Windows**: `%APPDATA%\HomeMap\homemapdata/`
+
+> **Note**: The `.env` file is optional and only needed for advanced configuration.
 
 ## Configuration File Structure
+
+> **Note**: For most users, you don't need to edit this file directly! Use the Settings UI instead. This section is for developers who want to understand the file format or create custom configurations.
 
 The main configuration file is `homemapdata/config.json`. It defines:
 
 - Application name and icon
 - Floor plans
 - Device placements
+
+**Location:**
+- **macOS**: `~/Library/Application Support/HomeMap/homemapdata/config.json`
+- **Windows**: `%APPDATA%\HomeMap\homemapdata\config.json`
 
 ### Basic Structure
 
@@ -65,6 +85,8 @@ The main configuration file is `homemapdata/config.json`. It defines:
 | `devices` | array | Yes | Array of device placements |
 
 ## Floor Plans
+
+> **Recommended**: Use Settings → Floors tab to add floors. This section explains the underlying file format for developers.
 
 Each floor requires:
 - Unique ID
@@ -102,6 +124,8 @@ Each floor requires:
 - **Aspect ratio**: Will scale to fit window while maintaining aspect ratio
 
 ## Devices
+
+> **Recommended**: Use Edit Mode → Device Management panel to add devices. This section explains the underlying file format for developers.
 
 Devices are placed on floors using natural image coordinates.
 
@@ -163,19 +187,22 @@ For devices that appear on multiple floors (e.g., thermostats, security panels):
 
 ### Managing Devices
 
-**Recommended: Use the Visual UI**
-1. Enable Edit Mode (toggle at top)
-2. Right-click empty space → "Add Device"
-3. Right-click device → "Edit" or "Delete"
-4. Drag devices to reposition
+**Recommended: Use the Device Management Panel**
+1. Click Edit Mode (✏️)
+2. Click hamburger menu (☰) → "Device Management"
+3. Find your device and click "Install"
+4. Drag device to position it on the floor plan
+5. Exit Edit Mode to save
 
-**Manual Editing**:
+**For Developers: Manual Editing**:
 1. Get device ID from HC3
 2. Choose appropriate widget type
-3. Position device on floor plan
-4. Save and reload app
+3. Add device to `config.json` with position coordinates
+4. Reload app to see changes
 
 ## Widget System
+
+> **For End Users**: HomeMap comes with all the widgets you need built-in! This section is for **developers** who want to create custom widgets.
 
 Widgets define how devices are rendered and what actions they support.
 
@@ -185,7 +212,15 @@ Widgets define how devices are rendered and what actions they support.
 
 Widget definitions are JSON files in `homemapdata/widgets/`:
 
-**Available Widgets** (v0.1.5+):
+**Built-in Widgets** (auto-installed):
+- Located in `widgets/built-in/` (automatically synced on startup)
+- Don't edit these - they'll be overwritten!
+
+**Custom Widgets** (for developers):
+- Place in `widgets/packages/` for your own custom widgets
+- Won't be overwritten by auto-sync
+
+**Available Widget Types**:
 - `lightdim.json` - Dimmable lights with on/off/dim
 - `light.json` - Simple on/off lights
 - `binarySwitch.json` - Toggle switches
@@ -306,7 +341,19 @@ For detailed explanations of each section, see [docs/WIDGET_FORMAT.md](docs/WIDG
 
 ## Icons
 
+> **For End Users**: HomeMap comes with all necessary icons built-in! This section is for **developers** creating custom widgets.
+
 Icons are displayed on the floor plan to represent devices.
+
+### Icon File Location
+
+**Built-in Icons** (auto-installed):
+- Located in `icons/built-in/` (automatically synced on startup)
+- Don't edit these - they'll be overwritten!
+
+**Custom Icons** (for developers):
+- Place in `icons/packages/` for your own custom icons
+- Won't be overwritten by auto-sync
 
 ### Icon Sets (v0.1.5+)
 
@@ -338,31 +385,26 @@ Icon files should be in `homemapdata/icons/{iconSetName}/`:
 
 - **Format**: SVG recommended (crisp at any size, smaller files)
 - **Size**: 32x32 pixels default (scales automatically)
-- **Location**: `homemapdata/icons/{iconSetName}/{iconName}.{ext}`
+- **Location**: 
+  - Built-in: `homemapdata/icons/built-in/{iconSetName}/{iconName}.{ext}`
+  - Custom: `homemapdata/icons/packages/{iconSetName}/{iconName}.{ext}`
 - **Naming**: Use descriptive names matching your render conditions
 
 ### Example Icon Sets
 
-**Light Icons**:
+**Light Icons** (built-in):
 ```
-icons/lightIcons/
+icons/built-in/lightIcons/
   ├── off.svg
   ├── on.svg
   └── dim.svg
 ```
 
-**Motion Sensor Icons**:
+**Custom Icons** (for developers):
 ```
-icons/motionSensor/
-  ├── safe.svg
-  └── breached.svg
-```
-
-**Door Sensor Icons**:
-```
-icons/doorSensor/
-  ├── closed.svg
-  └── open.svg
+icons/packages/myCustomIcons/
+  ├── state1.svg
+  └── state2.svg
 ```
 
 ## Examples
@@ -517,82 +559,131 @@ For more examples, see:
 
 ## Tips and Best Practices
 
-1. **Use Visual UI**: Enable Edit Mode to add, edit, and position devices without manual JSON editing
+1. **Use the UI**: Settings, Floor Management, and Device Management handle everything for most users
 
-2. **Start with Settings Panel**: Use the cogwheel (⚙️) to configure HC3 connection instead of editing .env
+2. **Built-in vs Custom**:
+   - `built-in/` folders: Auto-synced, don't edit
+   - `packages/` folders: Your custom widgets/icons, safe to edit
 
-3. **Use Example Widgets**: Copy from `homemapdata.example/widgets/` and modify for your needs
+3. **For Developers Creating Custom Widgets**:
+   - Copy from `built-in/` to `packages/` as a starting point
+   - Test incrementally with one device at a time
+   - Check console (DevTools) to debug event processing
+   - Always set `widgetVersion: "0.1.5"` or higher
 
-4. **Icon Sets**: Organize icons into sets by device type for better management
+4. **Backup Config**: 
+   - Copy entire `homemapdata` folder before major changes
+   - Located in Application Support folder (see Quick Start section)
 
-5. **Test Incrementally**: Add one device at a time to verify everything works
+5. **Widget Versioning**: Always set `widgetVersion: "0.1.5"` or higher for new widgets
 
-6. **Check Console**: Use DevTools (Cmd+Shift+I or menu) to debug event processing
-
-7. **Backup Config**: Keep backups before major changes
-
-8. **Multi-Floor Devices**: HomeMap automatically handles format conversion - add/remove floors via Edit dialog
-
-9. **Widget Versioning**: Always set `widgetVersion: "0.1.5"` or higher for new widgets
-
-10. **Property-Specific APIs**: Use `/api/devices/${id}/properties/{property}` for better performance
+6. **Property-Specific APIs**: Use `/api/devices/${id}/properties/{property}` for better performance
 
 ## Troubleshooting
 
 **Device not showing**:
+- Use Device Management panel to reinstall the device
 - Check device ID matches HC3
-- Verify widget type exists in `widgets/` folder
-- Check `floor_id` matches a floor definition
-- Look for version compatibility errors in console
+- Verify device is enabled in HC3
+- Check that device is on the current floor
 
 **Icon not appearing**:
-- Verify icon set name and icon name match
-- Check files exist: `homemapdata/icons/{iconSet}/{iconName}.{ext}`
-- Look for loading errors in console
-- Ensure widget has `iconSet` property
+- Built-in icons should work automatically
+- For custom icons: verify files exist in `icons/packages/{iconSet}/`
+- Check icon set name and icon name match in widget
+- Look for loading errors in console (DevTools)
 
 **Action not working**:
-- Check HC3 API endpoint is correct in widget actions
-- Verify device supports the action in HC3
-- Check console for HTTP errors
-- Ensure `body` format matches HC3 expectations
+- Test the device in HC3 web interface first
+- Check console for HTTP errors (DevTools)
+- For custom widgets: verify API endpoint is correct
 
 **Events not updating**:
-- Check event `match` pattern includes property filter
-- Verify `updates` map is correct
+- Check HC3 connection status (green indicator at top right)
+- Refresh the page to reconnect
 - Look for event dispatch logs in console
-- Ensure widget version is 0.1.5+
-
-**Widget version errors**:
-- Update `widgetVersion` to "0.1.5" or higher
-- Convert old valuemaps format to new state/getters/render format
-- See `docs/WIDGET_FORMAT.md` for migration guide
 
 **Can't edit devices**:
-- Enable Edit Mode (toggle at top of window)
-- Right-click device for Edit/Delete
-- Right-click empty space to Add Device
+- Make sure Edit Mode (✏️) is enabled
+- Use Device Management panel (☰ menu)
+- Drag devices to reposition them
 
-## Migration from v0.1.4
+**Configuration folder not found**:
+- Should be created automatically on first launch
+- Check Application Support folder (see Quick Start section)
+- Try restarting the app
 
-If you have widgets in the old format (with valuemaps), see:
-- `docs/WIDGET_FORMAT.md` - Complete new format
-- `homemapdata.example/` - Working examples of all widget types
-- Migration involves converting `valuemaps` → `state`/`getters`/`render`/`actions`/`ui`
+## Advanced: Manual Configuration
+
+> **For Developers Only**: This section covers manual file editing for advanced users who need direct control.
+
+### Manual .env Configuration
+
+While the Settings UI is recommended, you can manually edit the `.env` file:
+
+**Location**: Same directory as the app executable (development) or user preferences (production)
+
+```bash
+HC3_HOST=192.168.1.100
+HC3_USER=admin
+HC3_PASSWORD=yourpassword
+HC3_PROTOCOL=http
+```
+
+**Note**: The `HC3_HOMEMAP` path is no longer needed - HomeMap uses Application Support folder automatically.
+
+### Manual Device Addition
+
+If you need to manually edit `config.json`:
+
+1. Find your config file:
+   - **macOS**: `~/Library/Application Support/HomeMap/homemapdata/config.json`
+   - **Windows**: `%APPDATA%\HomeMap\homemapdata\config.json`
+
+2. Add device entry:
+   ```json
+   {
+     "id": 385,
+     "name": "Living Room Light",
+     "type": "lightdim",
+     "floor_id": "floor1",
+     "position": { "x": 450, "y": 300 }
+   }
+   ```
+
+3. Save and restart HomeMap
+
+**Finding Coordinates**: Add a device via UI first, then check config.json to see the coordinates.
+
+### Custom Widget Development
+
+For creating custom widgets:
+
+1. Study built-in widgets in `homemapdata/widgets/built-in/`
+2. Create your widget in `homemapdata/widgets/packages/`
+3. Follow format in [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md)
+4. Test with a single device before deploying
+
+### Custom Icon Development
+
+For creating custom icons:
+
+1. Create icon set folder in `homemapdata/icons/packages/myIconSet/`
+2. Add SVG files (32x32px recommended)
+3. Reference in widget: `"iconSet": "myIconSet"`
+4. Use descriptive icon names matching render conditions
 
 ## Additional Resources
 
-- **Widget Format**: [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md) - Complete widget specification
-- **Multi-Floor Devices**: [docs/MULTI_FLOOR_DEVICES.md](docs/MULTI_FLOOR_DEVICES.md) - Multi-floor support details
-- **Examples**: `homemapdata.example/` - Complete working configuration
+- **User Tutorial**: [docs/TUTORIAL.md](docs/TUTORIAL.md) - Step-by-step guide for end users
+- **Widget Format**: [docs/WIDGET_FORMAT.md](docs/WIDGET_FORMAT.md) - Complete widget specification for developers
+- **Examples**: `homemapdata.example/` - Example widgets and icons
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md) - Version history and changes
-
-**Position wrong after edit**:
-- Verify floor width/height match actual image dimensions
-- Reload app after changing floor dimensions
+- **Forum Post**: [docs/FORUM_POST.html](docs/FORUM_POST.html) - Community discussion
 
 ## See Also
 
-- [README.md](README.md) - Installation and quick start
-- [homemapdata.example/](homemapdata.example/) - Example configuration
-- [docs/DEV_GUIDE.md](docs/DEV_GUIDE.md) - Development guide
+- [README.md](README.md) - Installation and quick start for end users
+- [docs/TUTORIAL.md](docs/TUTORIAL.md) - Complete user tutorial
+- [docs/DEV_GUIDE.md](docs/DEV_GUIDE.md) - Development guide for contributors
+- [homemapdata.example/](homemapdata.example/) - Example configuration files

@@ -563,7 +563,7 @@ export class DialogManager {
                     // If type changed, reload to update widget
                     if (typeChanged) {
                         console.log('Device type changed, reloading...');
-                        await this.app.loadDevices();
+                        await this.app.loadWidgets();
                         this.app.floorManager.renderFloors();
                     } else {
                         this.app.floorManager.renderFloors();
@@ -641,7 +641,7 @@ export class DialogManager {
             }
             
             await this.app.saveConfig();
-            this.app.renderFloors();
+            this.app.floorManager.renderFloors();
             
             document.body.removeChild(modal);
         });
