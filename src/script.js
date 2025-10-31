@@ -288,9 +288,9 @@ class HomeMap {
             document.getElementById('hc3Protocol').value = settings.hc3_protocol || 'http';
             document.getElementById('homemapPath').value = settings.homemap_path || '';
             
-            // Populate house name and icon from config
-            document.getElementById('houseName').value = this.homemapConfig.name || '';
-            document.getElementById('houseIcon').value = this.homemapConfig.icon || '🏠';
+            // Populate house name and icon from config (with fallback if config not loaded)
+            document.getElementById('houseName').value = this.homemapConfig?.name || '';
+            document.getElementById('houseIcon').value = this.homemapConfig?.icon || '🏠';
             
             // Load and display installed packages
             await this.loadInstalledPackages();
@@ -411,11 +411,11 @@ class HomeMap {
 
             await this.invoke('save_app_settings', { settings });
             
-            // Update house name and icon in config
+            // Update house name and icon in config (only if config is loaded)
             const houseName = document.getElementById('houseName').value.trim();
             const houseIcon = document.getElementById('houseIcon').value.trim();
             
-            if (houseName !== this.homemapConfig.name || houseIcon !== this.homemapConfig.icon) {
+            if (this.homemapConfig && (houseName !== this.homemapConfig.name || houseIcon !== this.homemapConfig.icon)) {
                 this.homemapConfig.name = houseName || 'My Home Map';
                 this.homemapConfig.icon = houseIcon || '🏠';
                 
@@ -583,8 +583,8 @@ class HomeMap {
     }
 
     async updateAppTitle() {
-        const appName = this.homemapConfig.name || 'HomeMap';
-        const iconPath = this.homemapConfig.icon;
+        const appName = this.homemapConfig?.name || 'HomeMap';
+        const iconPath = this.homemapConfig?.icon;
         
         // Update window title
         document.title = appName;
@@ -612,8 +612,8 @@ class HomeMap {
 
     updateWindowTitle() {
         // Simple wrapper to update title and header
-        const appName = this.homemapConfig.name || 'HomeMap';
-        const icon = this.homemapConfig.icon || '🏠';
+        const appName = this.homemapConfig?.name || 'HomeMap';
+        const icon = this.homemapConfig?.icon || '🏠';
         
         // Update window title
         document.title = appName;

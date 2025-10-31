@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed Windows template discovery
   - Added check for `_up_` folder next to executable (Windows bundling pattern)
   - Windows version now correctly finds template on startup
+- Fixed Settings dialog crash when config not loaded
+  - Added null-safe access to `homemapConfig` properties
+  - Settings can now be opened even if initial config load fails
+  - Prevents "cannot read property 'name' of undefined" error
+- Fixed "config file not found" error on Windows
+  - App now creates minimal config.json if template isn't found
+  - Gracefully handles missing template directory
+  - Creates necessary directory structure (widgets, icons) automatically
 
 ## [0.1.19] - 2025-10-31
 
