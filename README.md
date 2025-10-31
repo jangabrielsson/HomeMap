@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/jangabrielsson/HomeMap)](https://github.com/jangabrielsson/HomeMap/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
+<a href="https://www.buymeacoffee.com/rywnwpdvvni" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 ## Overview
 
 HomeMap is a desktop application for visualizing and controlling your Fibaro Home Center 3 (HC3) home automation system using interactive floor plans.
