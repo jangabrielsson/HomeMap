@@ -235,6 +235,26 @@ fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
     
     println!("Syncing built-in widgets and icons...");
     
+    // Copy config.json if it doesn't exist (don't overwrite user's config)
+    let template_config = template_dir.join("config.json");
+    let user_config = data_dir.join("config.json");
+    
+    if template_config.exists() && !user_config.exists() {
+        fs::copy(&template_config, &user_config)
+            .map_err(|e| format!("Failed to copy config.json: {}", e))?;
+        println!("Copied config.json from template");
+    }
+    
+    // Copy images folder if it doesn't exist (example floor plans)
+    let template_images = template_dir.join("images");
+    let user_images = data_dir.join("images");
+    
+    if template_images.exists() && !user_images.exists() {
+        copy_dir_recursive(&template_images, &user_images)
+            .map_err(|e| format!("Failed to copy images: {}", e))?;
+        println!("Copied images folder from template");
+    }
+    
     // Sync widgets/built-in
     let template_widgets = template_dir.join("widgets").join("built-in");
     let user_widgets = data_dir.join("widgets").join("built-in");
