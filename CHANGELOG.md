@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25] - 2025-10-31
+
 ### Added
 - **Device Management Sorting**: Added sortable columns in Device Management panel
   - Sort by Status, ID, Name, or Type
