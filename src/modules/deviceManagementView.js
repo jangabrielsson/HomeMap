@@ -4,6 +4,8 @@ export class DeviceManagementView {
         this.app = app;
         this.panel = null;
         this.hc3Devices = [];
+        this.sortColumn = 'status'; // status (installed first), id, name, type
+        this.sortDirection = 'asc'; // asc or desc
     }
 
     /**
@@ -69,7 +71,9 @@ export class DeviceManagementView {
         
         console.log('Available widgets for device management:', widgetOptions);
         
-        const floors = this.app.homemapConfig.floors;
+        // Store for later use
+        this.widgetOptions = widgetOptions;
+        this.floors = this.app.homemapConfig.floors;
 
         // Build device list
         const deviceRows = this.hc3Devices.map(hc3Device => {
@@ -79,7 +83,7 @@ export class DeviceManagementView {
             // Get suggested widget
             const suggestedWidget = this.app.autoMapManager.findWidgetForDevice(hc3Device);
             const widget = installedDevice?.type || suggestedWidget || 'genericdevice';
-            const floorId = installedDevice?.floor_id || floors[0]?.id;
+            const floorId = installedDevice?.floor_id || this.floors[0]?.id;
             const deviceName = installedDevice?.name || hc3Device.name;
             
             const isMapped = suggestedWidget !== null;
@@ -95,12 +99,11 @@ export class DeviceManagementView {
             };
         });
 
-        // Sort: installed first, then mapped, then unmapped
-        deviceRows.sort((a, b) => {
-            if (a.isInstalled !== b.isInstalled) return b.isInstalled - a.isInstalled;
-            if (a.isMapped !== b.isMapped) return b.isMapped - a.isMapped;
-            return a.deviceName.localeCompare(b.deviceName);
-        });
+        // Store device rows for later reference
+        this.deviceRows = deviceRows;
+
+        // Apply initial sorting
+        this.sortDeviceRows();
 
         const installedCount = deviceRows.filter(d => d.isInstalled).length;
         const mappedCount = deviceRows.filter(d => d.isMapped && !d.isInstalled).length;
@@ -124,51 +127,16 @@ export class DeviceManagementView {
                     <button id="refreshHC3Devices" class="secondary-button">🔄 Refresh from HC3</button>
                 </div>
 
-                <div class="device-management-list">
-                    ${deviceRows.map((row, index) => `
-                        <div class="device-row ${row.isInstalled ? 'installed' : ''}" data-index="${index}" data-device-id="${row.hc3Device.id}">
-                            <div class="device-row-content">
-                                <div class="device-row-header">
-                                    <input type="text" 
-                                        class="device-name-input" 
-                                        data-index="${index}"
-                                        value="${this.escapeHtml(row.deviceName)}"
-                                        placeholder="Device name">
-                                    ${row.isInstalled ? '<span class="installed-badge">✓</span>' : ''}
-                                    ${row.isInstalled ? '<button class="edit-device-btn" data-index="' + index + '" title="Edit device properties">✏️</button>' : ''}
-                                    ${!row.isMapped && !row.isInstalled ? '<span class="unmapped-badge">Unmapped</span>' : ''}
-                                </div>
-                                <div class="device-row-meta">
-                                    ID: ${row.hc3Device.id} | Type: ${row.hc3Device.type}
-                                </div>
-                                <div class="device-row-selectors">
-                                    <div class="device-selector-group">
-                                        <label>Widget:</label>
-                                        <select class="device-widget-select" data-index="${index}">
-                                            ${widgetOptions.map(w => 
-                                                `<option value="${w.value}" ${w.value === row.widget ? 'selected' : ''}>${w.display}</option>`
-                                            ).join('')}
-                                        </select>
-                                    </div>
-                                    <div class="device-selector-group">
-                                        <label>Floor:</label>
-                                        <select class="device-floor-select" data-index="${index}">
-                                            ${floors.map(f => 
-                                                `<option value="${f.id}" ${f.id === row.floorId ? 'selected' : ''}>${this.escapeHtml(f.name)}</option>`
-                                            ).join('')}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="device-row-actions">
-                                <button class="install-toggle-btn ${row.isInstalled ? 'uninstall' : 'install'}" 
-                                        data-index="${index}" 
-                                        title="${row.isInstalled ? 'Uninstall device' : 'Install device'}">
-                                    ${row.isInstalled ? 'Uninstall' : 'Install'}
-                                </button>
-                            </div>
-                        </div>
-                    `).join('')}
+                <div class="device-management-sort">
+                    <span style="margin-right: 10px; font-weight: 500;">Sort by:</span>
+                    <button class="sort-btn ${this.sortColumn === 'status' ? 'active' : ''}" data-sort="status">Status ${this.sortColumn === 'status' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}</button>
+                    <button class="sort-btn ${this.sortColumn === 'id' ? 'active' : ''}" data-sort="id">ID ${this.sortColumn === 'id' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}</button>
+                    <button class="sort-btn ${this.sortColumn === 'name' ? 'active' : ''}" data-sort="name">Name ${this.sortColumn === 'name' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}</button>
+                    <button class="sort-btn ${this.sortColumn === 'type' ? 'active' : ''}" data-sort="type">Type ${this.sortColumn === 'type' ? (this.sortDirection === 'asc' ? '↑' : '↓') : ''}</button>
+                </div>
+
+                <div class="device-management-list" id="deviceListContainer">
+                    ${this.renderDeviceList()}
                 </div>
 
                 <div class="device-management-footer">
@@ -179,11 +147,121 @@ export class DeviceManagementView {
 
         document.body.appendChild(this.panel);
 
-        // Store device rows for later reference
-        this.deviceRows = deviceRows;
-
         // Setup event handlers
         this.setupEventHandlers();
+    }
+
+    /**
+     * Sort device rows based on current sort column and direction
+     */
+    sortDeviceRows() {
+        const direction = this.sortDirection === 'asc' ? 1 : -1;
+        
+        this.deviceRows.sort((a, b) => {
+            let comparison = 0;
+            
+            switch (this.sortColumn) {
+                case 'status':
+                    // Installed first, then mapped, then unmapped
+                    if (a.isInstalled !== b.isInstalled) {
+                        comparison = b.isInstalled - a.isInstalled;
+                    } else if (a.isMapped !== b.isMapped) {
+                        comparison = b.isMapped - a.isMapped;
+                    } else {
+                        comparison = a.deviceName.localeCompare(b.deviceName);
+                    }
+                    break;
+                    
+                case 'id':
+                    comparison = a.hc3Device.id - b.hc3Device.id;
+                    break;
+                    
+                case 'name':
+                    comparison = a.deviceName.localeCompare(b.deviceName);
+                    break;
+                    
+                case 'type':
+                    comparison = a.hc3Device.type.localeCompare(b.hc3Device.type);
+                    break;
+            }
+            
+            return comparison * direction;
+        });
+    }
+
+    /**
+     * Render the device list HTML
+     */
+    renderDeviceList() {
+        return this.deviceRows.map((row, index) => `
+            <div class="device-row ${row.isInstalled ? 'installed' : ''}" data-index="${index}" data-device-id="${row.hc3Device.id}">
+                <div class="device-row-content">
+                    <div class="device-row-header">
+                        <input type="text" 
+                            class="device-name-input" 
+                            data-index="${index}"
+                            value="${this.escapeHtml(row.deviceName)}"
+                            placeholder="Device name">
+                        ${row.isInstalled ? '<span class="installed-badge">✓</span>' : ''}
+                        ${row.isInstalled ? '<button class="edit-device-btn" data-index="' + index + '" title="Edit device properties">✏️</button>' : ''}
+                        ${!row.isMapped && !row.isInstalled ? '<span class="unmapped-badge">Unmapped</span>' : ''}
+                    </div>
+                    <div class="device-row-meta">
+                        ID: ${row.hc3Device.id} | Type: ${row.hc3Device.type}
+                    </div>
+                    <div class="device-row-selectors">
+                        <div class="device-selector-group">
+                            <label>Widget:</label>
+                            <select class="device-widget-select" data-index="${index}">
+                                ${this.widgetOptions.map(w => 
+                                    `<option value="${w.value}" ${w.value === row.widget ? 'selected' : ''}>${w.display}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="device-selector-group">
+                            <label>Floor:</label>
+                            <select class="device-floor-select" data-index="${index}">
+                                ${this.floors.map(f => 
+                                    `<option value="${f.id}" ${f.id === row.floorId ? 'selected' : ''}>${this.escapeHtml(f.name)}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="device-row-actions">
+                    <button class="install-toggle-btn ${row.isInstalled ? 'uninstall' : 'install'}" 
+                            data-index="${index}" 
+                            title="${row.isInstalled ? 'Uninstall device' : 'Install device'}">
+                        ${row.isInstalled ? 'Uninstall' : 'Install'}
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    /**
+     * Update the device list display after sorting
+     */
+    updateDeviceListDisplay() {
+        const container = this.panel.querySelector('#deviceListContainer');
+        if (container) {
+            container.innerHTML = this.renderDeviceList();
+            // Re-attach event handlers for the new elements
+            this.attachDeviceListHandlers();
+        }
+        
+        // Update sort buttons
+        const sortButtons = this.panel.querySelectorAll('.sort-btn');
+        sortButtons.forEach(btn => {
+            const column = btn.dataset.sort;
+            if (column === this.sortColumn) {
+                btn.classList.add('active');
+                btn.textContent = btn.textContent.replace(/[↑↓]/g, '').trim() + ' ' + (this.sortDirection === 'asc' ? '↑' : '↓');
+            } else {
+                btn.classList.remove('active');
+                btn.textContent = btn.textContent.replace(/[↑↓]/g, '').trim();
+            }
+        });
     }
 
     /**
@@ -199,14 +277,51 @@ export class DeviceManagementView {
             closeFooterBtn.addEventListener('click', () => this.closePanel());
         }
 
+        // Sort buttons
+        const sortButtons = this.panel.querySelectorAll('.sort-btn');
+        sortButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const column = btn.dataset.sort;
+                if (this.sortColumn === column) {
+                    // Toggle direction
+                    this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    // New column, default to ascending
+                    this.sortColumn = column;
+                    this.sortDirection = 'asc';
+                }
+                this.sortDeviceRows();
+                this.updateDeviceListDisplay();
+            });
+        });
+
         // Refresh button
         const refreshBtn = this.panel.querySelector('#refreshHC3Devices');
-        refreshBtn.addEventListener('click', () => this.refreshDevices());
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                await this.refreshDevices();
+            });
+        }
 
+        // Close on overlay click
+        this.panel.addEventListener('click', (e) => {
+            if (e.target === this.panel) {
+                this.closePanel();
+            }
+        });
+
+        // Device list handlers
+        this.attachDeviceListHandlers();
+    }
+
+    /**
+     * Attach event handlers to device list elements
+     */
+    attachDeviceListHandlers() {
         // Install/Uninstall buttons
         const installButtons = this.panel.querySelectorAll('.install-toggle-btn');
         installButtons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', async () => {
                 const index = parseInt(btn.dataset.index);
                 const row = this.deviceRows[index];
                 
@@ -251,13 +366,6 @@ export class DeviceManagementView {
                 const index = parseInt(btn.dataset.index);
                 this.editDeviceProperties(index);
             });
-        });
-
-        // Close on overlay click
-        this.panel.addEventListener('click', (e) => {
-            if (e.target === this.panel) {
-                this.closePanel();
-            }
         });
     }
 

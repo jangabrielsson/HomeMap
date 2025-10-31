@@ -1212,6 +1212,39 @@ main {
     flex-wrap: wrap;
 }
 
+.device-management-sort {
+    display: flex;
+    gap: 8px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #333;
+    align-items: center;
+    background: #1a1a1a;
+}
+
+.device-management-sort .sort-btn {
+    padding: 6px 12px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #ccc;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.device-management-sort .sort-btn:hover {
+    background: #333;
+    border-color: #555;
+    color: #fff;
+}
+
+.device-management-sort .sort-btn.active {
+    background: #4a9eff;
+    border-color: #4a9eff;
+    color: #fff;
+    font-weight: 500;
+}
+
 .device-management-list {
     flex: 1;
     overflow-y: auto;

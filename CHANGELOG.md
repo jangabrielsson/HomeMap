@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Device Management Sorting**: Added sortable columns in Device Management panel
+  - Sort by Status, ID, Name, or Type
+  - Click same column again to reverse sort direction
+  - Visual indicator shows active sort column and direction
+
 ### Fixed
 - Fixed device editing error: `loadDevices is not a function` 
   - Changed to correct method name `loadWidgets()`
