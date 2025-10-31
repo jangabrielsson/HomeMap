@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed device deletion error: `renderFloors is not a function`
   - Changed to correct path `floorManager.renderFloors()`
   - Device deletion now works without errors
+- Fixed Windows template discovery
+  - Added check for `_up_` folder next to executable (Windows bundling pattern)
+  - Windows version now correctly finds template on startup
 
 ## [0.1.19] - 2025-10-31
 

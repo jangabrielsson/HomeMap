@@ -292,11 +292,20 @@ fn find_template_directory() -> Result<PathBuf, String> {
         println!("Executable path: {:?}", exe_path);
         
         if let Some(exe_dir) = exe_path.parent() {
+            // Try next to executable (Windows typically)
             let template = exe_dir.join("homemapdata.example");
             println!("Checking: {:?}", template);
             if template.exists() {
                 println!("Found template at: {:?}", template);
                 return Ok(template);
+            }
+            
+            // Try _up_ directory next to exe (Windows with Tauri bundling)
+            let up_dir = exe_dir.join("_up_").join("homemapdata.example");
+            println!("Checking _up_ next to exe: {:?}", up_dir);
+            if up_dir.exists() {
+                println!("Found template in _up_: {:?}", up_dir);
+                return Ok(up_dir);
             }
             
             // Also check in Resources (macOS bundle)
@@ -320,10 +329,10 @@ fn find_template_directory() -> Result<PathBuf, String> {
                 }
             }
             
-            // Check _up_ directory (Tauri resource bundling pattern)
-            let up_dir = exe_dir.join("..").join("Resources").join("_up_").join("homemapdata.example");
-            println!("Checking _up_: {:?}", up_dir);
-            if let Ok(canonical) = up_dir.canonicalize() {
+            // Check _up_ directory in Resources (macOS Tauri resource bundling pattern)
+            let up_dir_macos = exe_dir.join("..").join("Resources").join("_up_").join("homemapdata.example");
+            println!("Checking _up_ in Resources: {:?}", up_dir_macos);
+            if let Ok(canonical) = up_dir_macos.canonicalize() {
                 if canonical.exists() {
                     println!("Found template in _up_: {:?}", canonical);
                     return Ok(canonical);
