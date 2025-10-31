@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.17] - 2025-10-31
+
+### Added
+- **Auto-Discover HC3 Devices**: New feature to automatically discover and add HC3 devices
+  - "Auto-discover" button in Edit Mode for quick device discovery
+  - Fetches all devices from HC3 and suggests widget mappings
+  - Shows ALL devices (both mapped and unmapped)
+  - Mapped devices checked by default, unmapped devices unchecked
+  - **Widget Selection**: Dropdown for each device to select/change widget type
+  - **Floor Selection**: Dropdown to choose which floor to place each device
+  - Device grouping by floor with smart grid positioning
+  - Control buttons: "Select All", "Deselect All", "Select Mapped Only"
+  - Visual indicators for unmapped devices with "Unmapped" badge
+  - Success message shows devices added per floor
+- **Device Mapping System**:
+  - JSON-based mapping rules in `src/deviceMappings.json`
+  - Automatic widget assignment based on device type, interface, and properties
+  - Fallback logic for complex device types (e.g., binarySwitch with/without light interface)
+  - 15 device type mappings included out of the box
+- **Generic Device Widget**:
+  - New `genericdevice` widget for unmapped/unknown devices
+  - Static icon display with no interactions
+  - Perfect for devices without specific widget support
+  - Located at `homemapdata/widgets/built-in/genericdevice.json`
+- **New AutoMapManager Module**: Handles device discovery, mapping, and batch addition
+
+### Changed
+- **HC3ApiManager**: Added `fetchDevices()` method to retrieve all devices from HC3
+- **Device Format**: Auto-discovered devices use correct format (`type`, `floor_id`, `position`)
+- **Button Label**: Auto-discover button shortened to "Auto-discover" (no emoji) to save header space
+
+### Fixed
+- **Authentication**: Fixed `config.user` vs `config.username` inconsistency in `fetchDevices()`
+- **Status Update**: Fixed missing parameter name (`status` vs `state`) in `updateStatus()` method
+- **Syntax Error**: Removed duplicate closing brace in HC3ApiManager
+
 ## [0.1.16] - 2025-10-30
 
 ### Added

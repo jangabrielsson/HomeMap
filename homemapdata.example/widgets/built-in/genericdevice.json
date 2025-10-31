@@ -1,0 +1,14 @@
+{
+  "version": "0.1.0",
+  "name": "Generic Device",
+  "description": "Generic unmapped device - static icon with no interaction",
+  "package": "com.fibaro.built-in",
+  "iconSetMap": {
+    "default": {
+      "iconSet": "genericDevice",
+      "package": "com.fibaro.built-in"
+    }
+  },
+  "statusGetters": [],
+  "actions": []
+}

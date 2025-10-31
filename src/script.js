@@ -16,6 +16,8 @@ import { FloorManager } from './modules/floorManager.js';
 import { ContextMenuManager } from './modules/contextMenuManager.js';
 import { HC3ApiManager } from './modules/hc3ApiManager.js';
 import { AutoMapManager } from './modules/autoMapManager.js';
+import { DeviceManagementView } from './modules/deviceManagementView.js';
+import { FloorManagementDialog } from './modules/floorManagementDialog.js';
 import packageManager from './modules/packageManager.js';
 
 class HomeMap {
@@ -44,6 +46,8 @@ class HomeMap {
         this.contextMenuManager = new ContextMenuManager(this);
         this.hc3ApiManager = new HC3ApiManager(this);
         this.autoMapManager = new AutoMapManager(this);
+        this.deviceManagementView = new DeviceManagementView(this);
+        this.floorManagementDialog = new FloorManagementDialog(this);
         
         // Zoom state
         this.zoomLevel = 100; // Default 100%
@@ -102,7 +106,7 @@ class HomeMap {
 
     setupEditMode() {
         const editToggle = document.getElementById('editMode');
-        const autoDiscoverBtn = document.getElementById('autoDiscoverBtn');
+        const manageDevicesBtn = document.getElementById('autoDiscoverBtn');
         
         if (editToggle) {
             editToggle.addEventListener('change', (e) => {
@@ -111,9 +115,9 @@ class HomeMap {
             });
         }
         
-        if (autoDiscoverBtn) {
-            autoDiscoverBtn.addEventListener('click', async () => {
-                await this.autoMapManager.autoDiscoverDevices();
+        if (manageDevicesBtn) {
+            manageDevicesBtn.addEventListener('click', async () => {
+                await this.deviceManagementView.openPanel();
             });
         }
     }
@@ -284,6 +288,10 @@ class HomeMap {
             document.getElementById('hc3Protocol').value = settings.hc3_protocol || 'http';
             document.getElementById('homemapPath').value = settings.homemap_path || '';
             
+            // Populate house name and icon from config
+            document.getElementById('houseName').value = this.homemapConfig.name || '';
+            document.getElementById('houseIcon').value = this.homemapConfig.icon || '🏠';
+            
             // Load and display installed packages
             await this.loadInstalledPackages();
             
@@ -403,6 +411,23 @@ class HomeMap {
 
             await this.invoke('save_app_settings', { settings });
             
+            // Update house name and icon in config
+            const houseName = document.getElementById('houseName').value.trim();
+            const houseIcon = document.getElementById('houseIcon').value.trim();
+            
+            if (houseName !== this.homemapConfig.name || houseIcon !== this.homemapConfig.icon) {
+                this.homemapConfig.name = houseName || 'My Home Map';
+                this.homemapConfig.icon = houseIcon || '🏠';
+                
+                // Save updated config
+                const filePath = `${this.dataPath}/config.json`;
+                const content = JSON.stringify(this.homemapConfig, null, 4);
+                await this.invoke('save_config', { filePath, content });
+                
+                // Update window title
+                this.updateWindowTitle();
+            }
+            
             // Reload config so the app uses the new credentials
             this.config = await this.invoke('get_hc3_config');
             console.log('Config reloaded with new credentials');
@@ -461,6 +486,9 @@ class HomeMap {
                 deviceEl.classList.remove('edit-mode');
             }
         });
+        
+        // Re-render floors to show/hide [+] tab
+        this.floorManager.renderFloors();
         
         console.log(`Edit mode: ${this.editMode ? 'ON' : 'OFF'}`);
     }
@@ -544,6 +572,21 @@ class HomeMap {
                 // Use default house emoji
                 header.textContent = `🏠 ${appName}`;
             }
+        }
+    }
+
+    updateWindowTitle() {
+        // Simple wrapper to update title and header
+        const appName = this.homemapConfig.name || 'HomeMap';
+        const icon = this.homemapConfig.icon || '🏠';
+        
+        // Update window title
+        document.title = appName;
+        
+        // Update header with icon (treating icon as emoji)
+        const header = document.querySelector('header h1');
+        if (header) {
+            header.textContent = `${icon} ${appName}`;
         }
     }
 

@@ -1,0 +1,21 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" cleaned="true">
+  <path d="M19 4.75V4" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 18.25C21.8995 18.25 24.25 15.8995 24.25 13C24.25 10.1005 21.8995 7.75 19 7.75C16.1005 7.75 13.75 10.1005 13.75 13C13.75 15.8995 16.1005 18.25 19 18.25Z" fill="#BCC7DC" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13 7L12.25 6.25" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13 19L12.25 19.75" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 7L25.75 6.25" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M25 19L25.75 19.75" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M10.75 13H10" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M19 21.25V22" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M27.25 13H28" stroke="#0E1B32" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M19 7.75C16.1005 7.75 13.75 10.1005 13.75 13C13.75 15.8995 16.1005 18.25 19 18.25V7.75Z" fill="#0E1B32"/>
+  <g clip-path="url(#LightMeter_svg__clip0_15792_12222)">
+    <path fill-rule="evenodd" clip-rule="evenodd" d="M1.57324 22.0177C1.2571 21.9978 1 22.2565 1 22.5733C1 22.8586 1.21055 23.0981 1.48946 23.1585C2.48264 23.3737 3.39727 23.7997 4.18418 24.3874C4.55707 24.6658 5.08565 24.6641 5.41473 24.335C5.79243 23.9573 5.7372 23.3272 5.2671 23.0736C4.15562 22.474 2.90364 22.1013 1.57324 22.0177ZM7.37433 24.6461L7.35357 24.6254C7.3605 24.6323 7.36742 24.6392 7.37433 24.6461ZM9.00534 26.8829C8.72012 26.3294 7.98497 26.2648 7.54467 26.7051L7.04377 27.206C6.77083 27.4789 6.68556 27.8832 6.78136 28.2571C6.9241 28.8142 7 29.3981 7 29.9997C7 30.5292 7.40293 30.9997 7.93246 30.9997H9C9.55229 30.9997 10.0058 30.5506 9.94528 30.0016C9.82244 28.8882 9.49651 27.836 9.00534 26.8829Z" fill="#0E1B32"/>
+    <path d="M7.79918 23.5058C8.25581 23.1934 8.80661 23.7442 8.49418 24.2008L4.13325 30.5745C3.80418 31.0554 3.1191 31.1191 2.70703 30.707L1.99992 29.9999L1.29281 29.2928C0.880829 28.8808 0.944493 28.1959 1.42535 27.8669L7.79918 23.5058Z" fill="#0E1B32"/>
+  </g>
+  <defs>
+    <clipPath id="LightMeter_svg__clip0_15792_12222">
+      <rect width="10" height="9" fill="white" transform="translate(1 22)"/>
+    </clipPath>
+  </defs>
+</svg>

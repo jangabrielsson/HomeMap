@@ -44,7 +44,7 @@ export class FloorManager {
             imageContainer.style.position = 'relative';
             imageContainer.style.display = 'inline-block';
             
-            // Add right-click handler for "Add Device"
+            // Add right-click handler for floor context menu
             imageContainer.addEventListener('contextmenu', (e) => {
                 if (!this.homeMap.editMode) return; // Only in edit mode
                 
@@ -55,12 +55,8 @@ export class FloorManager {
                 
                 e.preventDefault();
                 
-                // Calculate position relative to the image
-                const rect = imageContainer.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
-                
-                this.homeMap.contextMenuManager.showAddDeviceMenu(e.clientX, e.clientY, floor.id, { x, y });
+                // Show floor context menu (Edit Floor, Delete Floor, Add Floor)
+                this.homeMap.contextMenuManager.showFloorContextMenu(e.clientX, e.clientY, floor);
             });
 
             // Create image
@@ -91,6 +87,16 @@ export class FloorManager {
             floorView.appendChild(imageContainer);
             this.floorContainerEl.appendChild(floorView);
         });
+
+        // Add [+] tab in edit mode
+        if (this.homeMap.editMode) {
+            const addTab = document.createElement('button');
+            addTab.className = 'tab add-floor-tab';
+            addTab.textContent = '+';
+            addTab.title = 'Add Floor';
+            addTab.onclick = () => this.homeMap.floorManagementDialog.showAddFloorDialog();
+            this.floorTabsEl.appendChild(addTab);
+        }
 
         // Set current floor
         if (config.floors.length > 0) {

@@ -129,32 +129,193 @@ fn get_hc3_config() -> Result<HC3Config, String> {
 }
 
 fn get_homemap_data_path() -> Result<PathBuf, String> {
-    // First check for HC3_HOMEMAP environment variable
-    if let Ok(path) = env::var("HC3_HOMEMAP") {
-        let path_buf = PathBuf::from(path);
-        if path_buf.exists() {
-            println!("Using HC3_HOMEMAP: {:?}", path_buf);
-            return Ok(path_buf);
+    // First, try to load from saved settings
+    if let Ok(Some(settings)) = load_app_settings() {
+        if !settings.homemap_path.is_empty() {
+            let path_buf = PathBuf::from(&settings.homemap_path);
+            if path_buf.exists() {
+                println!("Using homemap_path from settings: {:?}", path_buf);
+                // Always sync built-in resources on startup
+                sync_builtin_resources(&path_buf)?;
+                return Ok(path_buf);
+            } else {
+                println!("Warning: Configured homemap_path does not exist: {:?}", path_buf);
+            }
         }
     }
     
-    // Try executable directory first
+    // Create default location in app data directory
+    let data_dir = dirs::data_dir()
+        .ok_or("Could not find data directory")?
+        .join("HomeMap")
+        .join("homemapdata");
+    
+    // Create the directory if it doesn't exist
+    if !data_dir.exists() {
+        println!("Creating default homemapdata directory: {:?}", data_dir);
+        fs::create_dir_all(&data_dir)
+            .map_err(|e| format!("Failed to create homemapdata directory: {}", e))?;
+        
+        // Create default config.json
+        initialize_default_config(&data_dir)?;
+    } else {
+        // Directory exists, just sync built-in resources
+        sync_builtin_resources(&data_dir)?;
+    }
+    
+    println!("Using default homemapdata: {:?}", data_dir);
+    Ok(data_dir)
+}
+
+fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
+    let config_file = data_dir.join("config.json");
+    let is_new_install = !config_file.exists();
+    
+    if is_new_install {
+        println!("Initializing homemapdata folder from template...");
+        
+        // Try to find homemapdata.example in project directory (dev mode) or app resources
+        let template_dir = find_template_directory()?;
+        
+        // Copy template contents to data directory
+        copy_dir_recursive(&template_dir, data_dir)
+            .map_err(|e| format!("Failed to copy template: {}", e))?;
+        
+        println!("Successfully initialized homemapdata from template");
+        
+        // Create installed-packages.json and widget-mappings.json
+        let packages_file = data_dir.join("installed-packages.json");
+        if !packages_file.exists() {
+            let default_packages = serde_json::json!({
+                "version": "1.0",
+                "packages": {}
+            });
+            fs::write(&packages_file, serde_json::to_string_pretty(&default_packages).unwrap())
+                .map_err(|e| format!("Failed to create installed-packages.json: {}", e))?;
+        }
+        
+        let mappings_file = data_dir.join("widget-mappings.json");
+        if !mappings_file.exists() {
+            let default_mappings = serde_json::json!({
+                "version": "1.0",
+                "mappings": {},
+                "defaults": {}
+            });
+            fs::write(&mappings_file, serde_json::to_string_pretty(&default_mappings).unwrap())
+                .map_err(|e| format!("Failed to create widget-mappings.json: {}", e))?;
+        }
+    }
+    
+    // Always sync built-in widgets and icons from template (on every startup)
+    sync_builtin_resources(data_dir)?;
+    
+    Ok(())
+}
+
+fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
+    let template_dir = find_template_directory()?;
+    
+    // Skip sync if data_dir is the same as template_dir parent (dev mode)
+    // In dev mode, data_dir would be something like /path/to/project/homemapdata
+    // and template_dir would be /path/to/project/homemapdata.example
+    if let Some(template_parent) = template_dir.parent() {
+        if let Some(data_parent) = data_dir.parent() {
+            if template_parent == data_parent {
+                // We're in the same directory as the template (dev mode)
+                // Check if data_dir name is "homemapdata" (the dev folder)
+                if let Some(dir_name) = data_dir.file_name() {
+                    if dir_name == "homemapdata" {
+                        println!("Dev mode - skipping folder sync");
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+    
+    println!("Syncing built-in widgets and icons...");
+    
+    // Sync widgets/built-in
+    let template_widgets = template_dir.join("widgets").join("built-in");
+    let user_widgets = data_dir.join("widgets").join("built-in");
+    
+    if template_widgets.exists() {
+        // Remove old built-ins and replace with new ones
+        if user_widgets.exists() {
+            fs::remove_dir_all(&user_widgets)
+                .map_err(|e| format!("Failed to remove old built-in widgets: {}", e))?;
+        }
+        
+        // Create parent directory if needed
+        if let Some(parent) = user_widgets.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create widgets directory: {}", e))?;
+        }
+        
+        copy_dir_recursive(&template_widgets, &user_widgets)
+            .map_err(|e| format!("Failed to sync built-in widgets: {}", e))?;
+        
+        println!("Synced built-in widgets");
+    }
+    
+    // Sync icons/built-in
+    let template_icons = template_dir.join("icons").join("built-in");
+    let user_icons = data_dir.join("icons").join("built-in");
+    
+    if template_icons.exists() {
+        // Remove old built-ins and replace with new ones
+        if user_icons.exists() {
+            fs::remove_dir_all(&user_icons)
+                .map_err(|e| format!("Failed to remove old built-in icons: {}", e))?;
+        }
+        
+        // Create parent directory if needed
+        if let Some(parent) = user_icons.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create icons directory: {}", e))?;
+        }
+        
+        copy_dir_recursive(&template_icons, &user_icons)
+            .map_err(|e| format!("Failed to sync built-in icons: {}", e))?;
+        
+        println!("Synced built-in icons");
+    }
+    
+    Ok(())
+}
+
+fn find_template_directory() -> Result<PathBuf, String> {
+    // First try exe directory (for built app)
     if let Ok(exe_path) = env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            let homemap_path = exe_dir.join("homemapdata");
-            if homemap_path.exists() {
-                println!("Using homemapdata from exe dir: {:?}", homemap_path);
-                return Ok(homemap_path);
+            let template = exe_dir.join("homemapdata.example");
+            if template.exists() {
+                println!("Found template at: {:?}", template);
+                return Ok(template);
             }
             
-            // Go up directories to find project root (for dev mode)
+            // Also check in Resources (macOS bundle)
+            let resources = exe_dir.parent()
+                .and_then(|p| Some(p.join("Resources").join("homemapdata.example")));
+            if let Some(res_template) = resources {
+                if res_template.exists() {
+                    println!("Found template in Resources: {:?}", res_template);
+                    return Ok(res_template);
+                }
+            }
+        }
+    }
+    
+    // Try to find in project directory (dev mode)
+    if let Ok(exe_path) = env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
             let mut current = exe_dir;
             for _ in 0..5 {
                 if let Some(parent) = current.parent() {
-                    let homemap_path = parent.join("homemapdata");
-                    if homemap_path.exists() {
-                        println!("Using homemapdata from parent: {:?}", homemap_path);
-                        return Ok(homemap_path);
+                    let template = parent.join("homemapdata.example");
+                    if template.exists() {
+                        println!("Found template in project: {:?}", template);
+                        return Ok(template);
                     }
                     current = parent;
                 } else {
@@ -166,14 +327,41 @@ fn get_homemap_data_path() -> Result<PathBuf, String> {
     
     // Try current working directory
     if let Ok(current_dir) = env::current_dir() {
-        let homemap_path = current_dir.join("homemapdata");
-        if homemap_path.exists() {
-            println!("Using homemapdata from cwd: {:?}", homemap_path);
-            return Ok(homemap_path);
+        let template = current_dir.join("homemapdata.example");
+        if template.exists() {
+            println!("Found template in cwd: {:?}", template);
+            return Ok(template);
         }
     }
     
-    Err("Could not find homemapdata folder. Set HC3_HOMEMAP environment variable or create homemapdata folder in project root.".to_string())
+    Err("Could not find homemapdata.example template folder".to_string())
+}
+
+fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+    
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        
+        // Skip .DS_Store and other hidden files
+        if file_name.to_string_lossy().starts_with('.') {
+            continue;
+        }
+        
+        let dest_path = dst.join(&file_name);
+        
+        if path.is_dir() {
+            copy_dir_recursive(&path, &dest_path)?;
+        } else {
+            fs::copy(&path, &dest_path)?;
+        }
+    }
+    
+    Ok(())
 }
 
 #[tauri::command]
@@ -303,32 +491,6 @@ fn save_config(file_path: String, content: String) -> Result<(), String> {
     Ok(())
 }
 
-fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> Result<(), String> {
-    if !dst.exists() {
-        fs::create_dir_all(dst)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
-    }
-    
-    let entries = fs::read_dir(src)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
-    
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
-        let src_path = entry.path();
-        let file_name = entry.file_name();
-        let dst_path = dst.join(&file_name);
-        
-        if src_path.is_dir() {
-            copy_dir_recursive(&src_path, &dst_path)?;
-        } else {
-            fs::copy(&src_path, &dst_path)
-                .map_err(|e| format!("Failed to copy file: {}", e))?;
-        }
-    }
-    
-    Ok(())
-}
-
 #[tauri::command]
 fn create_config_folder(app: tauri::AppHandle, destination_path: String) -> Result<String, String> {
     let dest = PathBuf::from(&destination_path);
@@ -386,7 +548,8 @@ fn create_config_folder(app: tauri::AppHandle, destination_path: String) -> Resu
     println!("Copying template to: {:?}", homemapdata_dest);
     
     // Copy the template
-    copy_dir_recursive(&template_path, &homemapdata_dest)?;
+    copy_dir_recursive(&template_path, &homemapdata_dest)
+        .map_err(|e| format!("Failed to copy template: {}", e))?;
     
     // Create package directory structure
     let widgets_builtin = homemapdata_dest.join("widgets").join("built-in");
@@ -470,20 +633,25 @@ struct AppSettings {
 
 #[tauri::command]
 fn get_app_settings() -> Result<AppSettings, String> {
-    // Load from environment variables or .env file
-    if let Some(home_dir) = dirs::home_dir() {
-        let home_env = home_dir.join(".env");
-        if home_env.exists() {
-            let _ = dotenvy::from_path(&home_env);
-        }
+    // Try to load saved settings first
+    if let Ok(Some(saved_settings)) = load_app_settings() {
+        return Ok(saved_settings);
     }
     
+    // Return defaults if no saved settings
+    let default_homemap_path = dirs::data_dir()
+        .ok_or("Could not find data directory")?
+        .join("HomeMap")
+        .join("homemapdata")
+        .to_string_lossy()
+        .to_string();
+    
     let settings = AppSettings {
-        hc3_host: env::var("HC3_HOST").unwrap_or_default(),
-        hc3_user: env::var("HC3_USER").unwrap_or_default(),
-        hc3_password: env::var("HC3_PASSWORD").unwrap_or_default(),
-        hc3_protocol: env::var("HC3_PROTOCOL").unwrap_or_else(|_| "http".to_string()),
-        homemap_path: env::var("HC3_HOMEMAP").unwrap_or_default(),
+        hc3_host: String::new(),
+        hc3_user: String::new(),
+        hc3_password: String::new(),
+        hc3_protocol: "http".to_string(),
+        homemap_path: default_homemap_path,
     };
     
     Ok(settings)

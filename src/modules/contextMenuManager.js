@@ -5,6 +5,7 @@ export class ContextMenuManager {
         this.homeMap = homeMap;
         this.contextMenuDevice = null;
         this.addDeviceContext = null;
+        this.floorContext = null;
     }
 
     /**
@@ -86,6 +87,11 @@ export class ContextMenuManager {
         if (addDeviceMenu) {
             addDeviceMenu.style.display = 'none';
         }
+
+        const floorMenu = document.getElementById('floorContextMenu');
+        if (floorMenu) {
+            floorMenu.style.display = 'none';
+        }
     }
 
     /**
@@ -127,5 +133,76 @@ export class ContextMenuManager {
         setTimeout(() => {
             document.addEventListener('click', hideOnClick);
         }, 10);
+    }
+
+    /**
+     * Show floor context menu (Edit Floor/Delete Floor/Add Floor)
+     */
+    showFloorContextMenu(x, y, floor) {
+        const menu = document.getElementById('floorContextMenu');
+        
+        if (!menu) {
+            console.error('Floor context menu element not found');
+            return;
+        }
+
+        // Store floor reference
+        this.floorContext = floor;
+
+        const editFloorBtn = document.getElementById('floorContextMenuEdit');
+        const deleteFloorBtn = document.getElementById('floorContextMenuDelete');
+        const addFloorBtn = document.getElementById('floorContextMenuAdd');
+
+        // Remove old listeners by cloning
+        const newEditBtn = editFloorBtn.cloneNode(true);
+        const newDeleteBtn = deleteFloorBtn.cloneNode(true);
+        const newAddBtn = addFloorBtn.cloneNode(true);
+        editFloorBtn.replaceWith(newEditBtn);
+        deleteFloorBtn.replaceWith(newDeleteBtn);
+        addFloorBtn.replaceWith(newAddBtn);
+
+        newEditBtn.addEventListener('click', () => {
+            this.hideContextMenu();
+            this.homeMap.floorManagementDialog.showEditFloorDialog(floor);
+        });
+
+        newDeleteBtn.addEventListener('click', () => {
+            this.hideContextMenu();
+            this.homeMap.floorManagementDialog.deleteFloor(floor);
+        });
+
+        newAddBtn.addEventListener('click', () => {
+            this.hideContextMenu();
+            this.homeMap.floorManagementDialog.showAddFloorDialog();
+        });
+
+        // Position the menu
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+        menu.style.display = 'block';
+
+        // Hide menu when clicking elsewhere
+        const hideOnClick = (e) => {
+            if (e.ctrlKey) return;
+            
+            if (!menu.contains(e.target)) {
+                this.hideFloorContextMenu();
+                document.removeEventListener('click', hideOnClick);
+            }
+        };
+
+        setTimeout(() => {
+            document.addEventListener('click', hideOnClick);
+        }, 10);
+    }
+
+    /**
+     * Hide floor context menu
+     */
+    hideFloorContextMenu() {
+        const menu = document.getElementById('floorContextMenu');
+        if (menu) {
+            menu.style.display = 'none';
+        }
     }
 }

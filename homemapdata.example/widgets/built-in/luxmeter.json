@@ -1,0 +1,34 @@
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "luxmeter",
+    
+    "state": {
+        "value": 0
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "static",
+            "icon": "icon"
+        },
+        "subtext": {
+            "template": "${value} lx"
+        }
+    }
+}

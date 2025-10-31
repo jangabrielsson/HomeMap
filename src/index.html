@@ -24,9 +24,9 @@
             <div class="header-controls">
                 <button id="settingsBtn" class="icon-button" title="Settings">⚙️</button>
                 
-                <!-- Auto-discover button (shown in edit mode) -->
-                <button id="autoDiscoverBtn" class="auto-discover-btn" style="display: none;" title="Auto-discover HC3 Devices">
-                    Auto-discover
+                <!-- Manage Devices button (shown in edit mode) -->
+                <button id="autoDiscoverBtn" class="auto-discover-btn" style="display: none;" title="Manage HC3 Devices">
+                    🛠️ Manage Devices
                 </button>
                 
                 <!-- Zoom controls (shown in edit mode) -->
@@ -97,6 +97,18 @@
                 
                 <h3>Configuration</h3>
                 <div class="form-group">
+                    <label for="houseName">House Name</label>
+                    <input type="text" id="houseName" placeholder="My Home Map">
+                    <small>Displayed in the window title</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="houseIcon">House Icon (Emoji)</label>
+                    <input type="text" id="houseIcon" placeholder="🏠" maxlength="2">
+                    <small>Icon shown in the title (emoji recommended)</small>
+                </div>
+                
+                <div class="form-group">
                     <label for="homemapPath">HomeMap Data Path</label>
                     <div class="path-input">
                         <input type="text" id="homemapPath" placeholder="/path/to/homemapdata" readonly>
@@ -131,6 +143,13 @@
     <!-- Add Device Context Menu -->
     <div id="addDeviceMenu" class="context-menu" style="display: none;">
         <div class="context-menu-item" id="addDeviceMenuItem">Add Device</div>
+    </div>
+
+    <!-- Floor Context Menu -->
+    <div id="floorContextMenu" class="context-menu" style="display: none;">
+        <div class="context-menu-item" id="floorContextMenuEdit">Edit Floor</div>
+        <div class="context-menu-item" id="floorContextMenuAdd">Add Floor</div>
+        <div class="context-menu-item context-menu-delete" id="floorContextMenuDelete">Delete Floor</div>
     </div>
     
     <script src="updater.js"></script>
