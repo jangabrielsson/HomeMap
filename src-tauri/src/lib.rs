@@ -776,6 +776,16 @@ fn save_app_settings(settings: AppSettings) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn is_hc3_configured() -> bool {
+    // Check if settings.json exists and has non-empty HC3 host
+    if let Ok(Some(settings)) = load_app_settings() {
+        !settings.hc3_host.is_empty()
+    } else {
+        false
+    }
+}
+
+#[tauri::command]
 async fn select_homemap_folder<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> Result<Option<String>, String> {
     let folder = tauri::async_runtime::spawn(async move {
         rfd::AsyncFileDialog::new()
@@ -966,6 +976,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             http_fetch_insecure,
             get_hc3_config, 
+            is_hc3_configured,
             get_homemap_config, 
             get_data_path, 
             read_image_as_base64,

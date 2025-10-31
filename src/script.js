@@ -499,14 +499,14 @@ class HomeMap {
             this.config = await this.invoke('get_hc3_config');
             console.log('Config received:', this.config);
             
-            // Check if HC3 credentials are configured (not default values)
-            const isDefaultConfig = this.config.host === '192.168.1.1' && 
-                                   this.config.user === 'admin' && 
-                                   this.config.password === 'admin';
+            // Check if HC3 has been explicitly configured in settings
+            const isConfigured = await this.invoke('is_hc3_configured');
+            console.log('HC3 configured:', isConfigured);
             
-            if (isDefaultConfig) {
+            if (!isConfigured) {
+                console.log('Showing welcome dialog...');
                 // Show welcome dialog for first-time users
-                this.showWelcomeDialog();
+                await this.showWelcomeDialog();
                 // Still load the HomeMap config but don't try to connect
                 await this.loadHomeMapConfig();
                 this.hc3ApiManager.updateStatus('warning', 'HC3 not configured. Please set your credentials in Settings.');
@@ -524,25 +524,23 @@ class HomeMap {
         }
     }
     
-    showWelcomeDialog() {
-        const message = `
-            <div style="text-align: center; padding: 20px;">
-                <h2>👋 Welcome to HomeMap!</h2>
-                <p style="margin: 20px 0;">To get started, you need to configure your HC3 connection.</p>
-                <p>Please click the <strong>Settings</strong> button (⚙️) in the top-right corner and enter:</p>
-                <ul style="text-align: left; display: inline-block; margin: 20px auto;">
-                    <li>HC3 IP Address or Hostname</li>
-                    <li>Username</li>
-                    <li>Password</li>
-                    <li>Protocol (http or https)</li>
-                </ul>
-                <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
-                    You can also configure floor plans and manage devices once connected!
-                </p>
-            </div>
-        `;
+    async showWelcomeDialog() {
+        const message = `Welcome to HomeMap!
+
+To get started, you need to configure your HC3 connection.
+
+Please click the Settings button (⚙️) in the top-right corner and enter:
+• HC3 IP Address or Hostname
+• Username
+• Password
+• Protocol (http or https)
+
+You can also configure floor plans and manage devices once connected!`;
         
-        this.dialogManager.showMessage('Welcome', message);
+        await window.__TAURI__.dialog.message(message, { 
+            title: 'Welcome to HomeMap',
+            kind: 'info'
+        });
     }
 
     async loadHomeMapConfig() {
