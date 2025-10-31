@@ -175,13 +175,42 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
         println!("Initializing homemapdata folder from template...");
         
         // Try to find homemapdata.example in project directory (dev mode) or app resources
-        let template_dir = find_template_directory()?;
-        
-        // Copy template contents to data directory
-        copy_dir_recursive(&template_dir, data_dir)
-            .map_err(|e| format!("Failed to copy template: {}", e))?;
-        
-        println!("Successfully initialized homemapdata from template");
+        match find_template_directory() {
+            Ok(template_dir) => {
+                // Copy template contents to data directory
+                copy_dir_recursive(&template_dir, data_dir)
+                    .map_err(|e| format!("Failed to copy template: {}", e))?;
+                
+                println!("Successfully initialized homemapdata from template");
+            }
+            Err(e) => {
+                println!("Warning: Could not find template directory: {}", e);
+                println!("Creating minimal config.json...");
+                
+                // Create a minimal config.json if template not found
+                let minimal_config = serde_json::json!({
+                    "name": "HomeMap",
+                    "icon": "🏠",
+                    "floors": [],
+                    "devices": []
+                });
+                
+                fs::write(&config_file, serde_json::to_string_pretty(&minimal_config).unwrap())
+                    .map_err(|e| format!("Failed to create minimal config.json: {}", e))?;
+                
+                // Create directory structure
+                fs::create_dir_all(data_dir.join("widgets").join("built-in"))
+                    .map_err(|e| format!("Failed to create widgets directory: {}", e))?;
+                fs::create_dir_all(data_dir.join("widgets").join("packages"))
+                    .map_err(|e| format!("Failed to create widgets/packages directory: {}", e))?;
+                fs::create_dir_all(data_dir.join("icons").join("built-in"))
+                    .map_err(|e| format!("Failed to create icons directory: {}", e))?;
+                fs::create_dir_all(data_dir.join("icons").join("packages"))
+                    .map_err(|e| format!("Failed to create icons/packages directory: {}", e))?;
+                
+                println!("Created minimal homemapdata structure");
+            }
+        }
         
         // Create installed-packages.json and widget-mappings.json
         let packages_file = data_dir.join("installed-packages.json");
@@ -206,14 +235,27 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
         }
     }
     
-    // Always sync built-in widgets and icons from template (on every startup)
-    sync_builtin_resources(data_dir)?;
+    // Try to sync built-in widgets and icons from template (on every startup)
+    // If template not found, just skip the sync
+    if let Ok(template_dir) = find_template_directory() {
+        sync_builtin_resources_from_template(&template_dir, data_dir)?;
+    } else {
+        println!("Skipping built-in resource sync - template not found");
+    }
     
     Ok(())
 }
 
 fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
-    let template_dir = find_template_directory()?;
+    if let Ok(template_dir) = find_template_directory() {
+        sync_builtin_resources_from_template(&template_dir, data_dir)?;
+    } else {
+        println!("Skipping built-in resource sync - template not found");
+    }
+    Ok(())
+}
+
+fn sync_builtin_resources_from_template(template_dir: &PathBuf, data_dir: &PathBuf) -> Result<(), String> {
     
     // Skip sync if data_dir is the same as template_dir parent (dev mode)
     // In dev mode, data_dir would be something like /path/to/project/homemapdata
