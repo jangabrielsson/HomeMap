@@ -285,10 +285,15 @@ fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
 }
 
 fn find_template_directory() -> Result<PathBuf, String> {
+    println!("Searching for homemapdata.example template...");
+    
     // First try exe directory (for built app)
     if let Ok(exe_path) = env::current_exe() {
+        println!("Executable path: {:?}", exe_path);
+        
         if let Some(exe_dir) = exe_path.parent() {
             let template = exe_dir.join("homemapdata.example");
+            println!("Checking: {:?}", template);
             if template.exists() {
                 println!("Found template at: {:?}", template);
                 return Ok(template);
@@ -298,9 +303,30 @@ fn find_template_directory() -> Result<PathBuf, String> {
             let resources = exe_dir.parent()
                 .and_then(|p| Some(p.join("Resources").join("homemapdata.example")));
             if let Some(res_template) = resources {
+                println!("Checking: {:?}", res_template);
                 if res_template.exists() {
                     println!("Found template in Resources: {:?}", res_template);
                     return Ok(res_template);
+                }
+            }
+            
+            // Check in ../Resources from MacOS folder (macOS app bundle structure)
+            let macos_resources = exe_dir.join("..").join("Resources").join("homemapdata.example");
+            println!("Checking: {:?}", macos_resources);
+            if let Ok(canonical) = macos_resources.canonicalize() {
+                if canonical.exists() {
+                    println!("Found template in MacOS Resources: {:?}", canonical);
+                    return Ok(canonical);
+                }
+            }
+            
+            // Check _up_ directory (Tauri resource bundling pattern)
+            let up_dir = exe_dir.join("..").join("Resources").join("_up_").join("homemapdata.example");
+            println!("Checking _up_: {:?}", up_dir);
+            if let Ok(canonical) = up_dir.canonicalize() {
+                if canonical.exists() {
+                    println!("Found template in _up_: {:?}", canonical);
+                    return Ok(canonical);
                 }
             }
         }
@@ -896,14 +922,10 @@ pub fn run() {
             let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
                 .build(app)?;
             
-            let create_config = MenuItemBuilder::with_id("create-config", "Create Configuration...")
-                .build(app)?;
-            
             // Create app menu (first menu on macOS)
             let app_menu = SubmenuBuilder::new(app, "HomeMap")
                 .item(&PredefinedMenuItem::about(app, None, None)?)
                 .item(&check_updates)
-                .item(&create_config)
                 .separator()
                 .item(&PredefinedMenuItem::services(app, None)?)
                 .separator()
@@ -945,11 +967,6 @@ pub fn run() {
                     println!("Check for updates event received");
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.emit("check-for-updates", ());
-                    }
-                } else if event.id() == "create-config" {
-                    println!("Create configuration event received");
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.emit("create-config", ());
                     }
                 }
             });

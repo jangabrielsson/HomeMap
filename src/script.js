@@ -499,6 +499,20 @@ class HomeMap {
             this.config = await this.invoke('get_hc3_config');
             console.log('Config received:', this.config);
             
+            // Check if HC3 credentials are configured (not default values)
+            const isDefaultConfig = this.config.host === '192.168.1.1' && 
+                                   this.config.user === 'admin' && 
+                                   this.config.password === 'admin';
+            
+            if (isDefaultConfig) {
+                // Show welcome dialog for first-time users
+                this.showWelcomeDialog();
+                // Still load the HomeMap config but don't try to connect
+                await this.loadHomeMapConfig();
+                this.hc3ApiManager.updateStatus('warning', 'HC3 not configured. Please set your credentials in Settings.');
+                return;
+            }
+            
             await this.hc3ApiManager.testConnection();
             console.log('HomeMap initialized with HC3:', this.config.host);
             
@@ -508,6 +522,27 @@ class HomeMap {
             console.error('Failed to initialize:', error);
             this.hc3ApiManager.updateStatus('error', `Configuration Error: ${error.message}`);
         }
+    }
+    
+    showWelcomeDialog() {
+        const message = `
+            <div style="text-align: center; padding: 20px;">
+                <h2>👋 Welcome to HomeMap!</h2>
+                <p style="margin: 20px 0;">To get started, you need to configure your HC3 connection.</p>
+                <p>Please click the <strong>Settings</strong> button (⚙️) in the top-right corner and enter:</p>
+                <ul style="text-align: left; display: inline-block; margin: 20px auto;">
+                    <li>HC3 IP Address or Hostname</li>
+                    <li>Username</li>
+                    <li>Password</li>
+                    <li>Protocol (http or https)</li>
+                </ul>
+                <p style="margin-top: 20px; font-size: 0.9em; color: #666;">
+                    You can also configure floor plans and manage devices once connected!
+                </p>
+            </div>
+        `;
+        
+        this.dialogManager.showMessage('Welcome', message);
     }
 
     async loadHomeMapConfig() {

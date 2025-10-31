@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.18] - 2025-10-31
+
+### Added
+- **Floor Management System**:
+  - Add/Edit/Delete floors via UI - no manual config.json editing needed
+  - Native file picker for selecting floor plan images
+  - Image preview with automatic dimension detection
+  - Aspect ratio locking with checkbox for maintaining proportions
+  - Floor reordering with Move Up/Down buttons
+  - Right-click context menu on floor backgrounds
+  - [+] tab in Edit Mode to quickly add new floors
+  - Images automatically organized in `floors/<floor-id>/` directories
+  - Full validation (prevents deleting floors with devices)
+
+- **Device Management Panel**:
+  - Unified side panel for managing all devices
+  - Immediate Install/Uninstall actions per device (no batch save needed)
+  - Edit device properties with pen icon (✏️) button
+  - Compact status badge: green "✓" for installed devices
+  - Widget and floor selection enabled for uninstalled devices (configure before installing)
+  - Visual highlighting for installed devices
+  - Seamless integration with existing edit workflow
+
+- **House Configuration in Settings**:
+  - House Name field - updates window title and header
+  - House Icon field - emoji input for branding (max 2 characters)
+  - No more manual config.json editing for basic configuration
+  - Changes apply immediately and update UI
+
+- **Auto-Managed homemapdata Folder**:
+  - Automatic creation in app-specific storage (`~/Library/Application Support/HomeMap/homemapdata` on macOS)
+  - Auto-populated from `homemapdata.example` template on first launch
+  - Includes all built-in widgets, icons, and example floor plans
+  - Path visible and configurable in Settings dialog
+  - Advanced users can browse to use custom folder location
+  - Removed dependency on HC3_HOMEMAP environment variable
+
+- **Auto-Sync Built-in Resources**:
+  - Automatically syncs `widgets/built-in/` on every app startup
+  - Automatically syncs `icons/built-in/` on every app startup
+  - Ensures users always have latest widget definitions and icon sets
+  - User packages (`widgets/packages/`, `icons/packages/`) remain untouched
+  - Development mode detection - skips sync for project's homemapdata folder
+
+### Changed
+- **Settings Dialog**: Added House Name and House Icon fields in Configuration section
+- **Floor Loading**: Now uses `read_image_as_base64` Tauri command for consistent image handling
+- **Initial Setup**: Much simpler for new users - app creates everything needed automatically
+- **Update Process**: Built-in widgets and icons update automatically with new app versions
+
+### Fixed
+- **Dialog Scrolling**: Added `max-height: 90vh` and `overflow-y: auto` to `.slider-content` for long dialogs
+- **Floor Image Preview**: Fixed loading of current floor image in Edit Floor dialog using correct path resolution
+- **Aspect Ratio Text**: Fixed checkbox label wrapping with `white-space: nowrap`
+- **Settings Save**: Fixed `save_config` command parameters (`filePath` and `content` instead of `configPath` and `config`)
+
+### Technical
+- **New Module**: `floorManagementDialog.js` (485 lines) - Complete floor CRUD operations
+- **Enhanced**: `deviceManagementView.js` - Refactored to immediate-action model
+- **Backend**: Rust functions for template discovery, recursive directory copying, and built-in sync
+- **Template Bundling**: `homemapdata.example` included in app resources for distribution
+
 ## [0.1.17] - 2025-10-31
 
 ### Added

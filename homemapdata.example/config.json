@@ -20,16 +20,5 @@
         }
     ],
 
-    "devices": [
-        {
-            "id": 123,
-            "name": "Living Room Light",
-            "type": "light",
-            "floor_id": "floor1",
-            "position": {
-                "x": 500,
-                "y": 300
-            }
-        }
-    ]
+    "devices": []
 }
