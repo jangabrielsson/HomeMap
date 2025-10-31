@@ -6,21 +6,26 @@ async function setupUpdater() {
     
     if (!check) {
         console.log('Updater not available (dev mode or missing plugin)');
-        return;
+    } else {
+        console.log('Updater initialized');
+        
+        // Listen for menu "Check for Updates" event
+        await window.__TAURI__.event.listen('check-for-updates', () => {
+            console.log('Check for updates triggered from menu');
+            checkForUpdates(false);
+        });
+        
+        // Listen for menu "Create Configuration" event
+        await window.__TAURI__.event.listen('create-config', () => {
+            console.log('Create configuration triggered from menu');
+            createConfiguration();
+        });
     }
     
-    console.log('Updater initialized');
-    
-    // Listen for menu "Check for Updates" event
-    await window.__TAURI__.event.listen('check-for-updates', () => {
-        console.log('Check for updates triggered from menu');
-        checkForUpdates(false);
-    });
-    
-    // Listen for menu "Create Configuration" event
-    await window.__TAURI__.event.listen('create-config', () => {
-        console.log('Create configuration triggered from menu');
-        createConfiguration();
+    // Listen for menu "About" event (always available, not just when updater is)
+    await window.__TAURI__.event.listen('show-about', async () => {
+        console.log('Show about triggered from menu');
+        await showAboutDialog();
     });
 }
 
@@ -154,6 +159,32 @@ async function createConfiguration() {
                 }
             );
         }
+    }
+}
+
+async function showAboutDialog() {
+    try {
+        // Get version from tauri.conf.json via Tauri API
+        const { getName, getVersion } = window.__TAURI__.app;
+        const appName = await getName();
+        const version = await getVersion();
+        
+        const message = `${appName}
+Version ${version}
+
+A HC3 Home Automation Visualization Tool
+
+© 2024-2025 Jan Gabrielsson`;
+        
+        if (window.__TAURI__?.dialog) {
+            const { message: showMessage } = window.__TAURI__.dialog;
+            await showMessage(message, {
+                title: `About ${appName}`,
+                kind: 'info'
+            });
+        }
+    } catch (error) {
+        console.error('Failed to show about dialog:', error);
     }
 }
 

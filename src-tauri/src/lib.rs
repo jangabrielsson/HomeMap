@@ -1013,9 +1013,12 @@ pub fn run() {
             let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
                 .build(app)?;
             
+            let about = MenuItemBuilder::with_id("about", "About HomeMap")
+                .build(app)?;
+            
             // Create app menu (first menu on macOS)
             let app_menu = SubmenuBuilder::new(app, "HomeMap")
-                .item(&PredefinedMenuItem::about(app, None, None)?)
+                .item(&about)
                 .item(&check_updates)
                 .separator()
                 .item(&PredefinedMenuItem::services(app, None)?)
@@ -1058,6 +1061,11 @@ pub fn run() {
                     println!("Check for updates event received");
                     if let Some(window) = app.get_webview_window("main") {
                         let _ = window.emit("check-for-updates", ());
+                    }
+                } else if event.id().as_ref() == "about" {
+                    println!("About event received");
+                    if let Some(window) = app.get_webview_window("main") {
+                        let _ = window.emit("show-about", ());
                     }
                 }
             });
