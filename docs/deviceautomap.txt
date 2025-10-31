@@ -1,0 +1,17 @@
+type                         interface             property                                widget
+-----------------------------------------------------------------------------------------------------------
+com.fibaro.binarySwitch      "light"               isLight=true                            light
+com.fibaro.binarySwitch                                                                    binarySwitch
+com.fibaro.binarySensor                                                                    motion
+com.fibaro.doorSensor                                                                      doorSensor
+com.fibaro.windowSensor                                                                    windowSensor
+com.fibaro.colorController                                                                 lightcolor
+com.fibaro.doorWindowSensor                                                                windowSensor
+com.fibaro.multilevelSwitch  "light"                isLight=true                           lightdim
+com.fibaro.multilevelSwitch                                                                gauge
+com.fibaro.doorLock                                                                        doorLock
+com.fibaro.temperatureSensor                                                               temperature
+com.fibaro.energyMeter                                                                     energyMeter
+com.fibaro.lightSensor                                                                     lux
+com.fibaro.motionSensor                                                                    motion
+com.fibaro.humiditySensor                                                                  humidity

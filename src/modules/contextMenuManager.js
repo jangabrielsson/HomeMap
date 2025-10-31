@@ -60,6 +60,9 @@ export class ContextMenuManager {
         
         // Hide menu when clicking elsewhere
         const hideOnClick = (e) => {
+            // Ignore Ctrl+Click on macOS (which triggers context menu)
+            if (e.ctrlKey) return;
+            
             if (!contextMenu.contains(e.target)) {
                 this.hideContextMenu();
                 document.removeEventListener('click', hideOnClick);
@@ -112,6 +115,9 @@ export class ContextMenuManager {
         
         // Hide menu when clicking elsewhere
         const hideOnClick = (e) => {
+            // Ignore Ctrl+Click on macOS (which triggers context menu)
+            if (e.ctrlKey) return;
+            
             if (!menu.contains(e.target)) {
                 this.hideContextMenu();
                 document.removeEventListener('click', hideOnClick);

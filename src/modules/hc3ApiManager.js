@@ -131,14 +131,51 @@ export class HC3ApiManager {
     }
 
     /**
+     * Fetch all devices from HC3
+     */
+    async fetchDevices() {
+        if (this.authLocked) {
+            throw new Error('Authentication is locked. Please check credentials in Settings.');
+        }
+
+        const config = this.homeMap.config;
+        const url = `${config.protocol}://${config.host}/api/devices`;
+        
+        try {
+            const response = await this.fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': 'Basic ' + btoa(`${config.user}:${config.password}`)
+                }
+            });
+
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    await this.handleAuthFailure(response.status);
+                    throw new Error('Authentication failed');
+                }
+                throw new Error(`HTTP ${response.status}: ${response.statusText || 'Failed to fetch devices'}`);
+            }
+
+            const devices = await response.json();
+            console.log(`Fetched ${devices.length} devices from HC3`);
+            return devices;
+            
+        } catch (error) {
+            console.error('Error fetching devices from HC3:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Update connection status display
      */
-    updateStatus(state, message) {
+    updateStatus(status, message) {
         this.homeMap.statusEl.textContent = message;
         this.homeMap.statusDot.className = 'status-dot';
-        if (state === 'connected') {
+        if (status === 'connected') {
             this.homeMap.statusDot.classList.add('connected');
-        } else if (state === 'error') {
+        } else if (status === 'error') {
             this.homeMap.statusDot.classList.add('error');
         }
     }

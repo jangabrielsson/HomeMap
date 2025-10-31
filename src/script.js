@@ -15,6 +15,7 @@ import { DialogManager } from './modules/dialogManager.js';
 import { FloorManager } from './modules/floorManager.js';
 import { ContextMenuManager } from './modules/contextMenuManager.js';
 import { HC3ApiManager } from './modules/hc3ApiManager.js';
+import { AutoMapManager } from './modules/autoMapManager.js';
 import packageManager from './modules/packageManager.js';
 
 class HomeMap {
@@ -42,6 +43,7 @@ class HomeMap {
         this.floorManager = new FloorManager(this);
         this.contextMenuManager = new ContextMenuManager(this);
         this.hc3ApiManager = new HC3ApiManager(this);
+        this.autoMapManager = new AutoMapManager(this);
         
         // Zoom state
         this.zoomLevel = 100; // Default 100%
@@ -100,10 +102,18 @@ class HomeMap {
 
     setupEditMode() {
         const editToggle = document.getElementById('editMode');
+        const autoDiscoverBtn = document.getElementById('autoDiscoverBtn');
+        
         if (editToggle) {
             editToggle.addEventListener('change', (e) => {
                 this.editMode = e.target.checked;
                 this.toggleEditMode();
+            });
+        }
+        
+        if (autoDiscoverBtn) {
+            autoDiscoverBtn.addEventListener('click', async () => {
+                await this.autoMapManager.autoDiscoverDevices();
             });
         }
     }
@@ -431,12 +441,16 @@ class HomeMap {
     }
 
     toggleEditMode() {
-        // Show/hide zoom controls
+        // Show/hide zoom controls and auto-discover button
         const zoomControls = document.getElementById('zoomControls');
+        const autoDiscoverBtn = document.getElementById('autoDiscoverBtn');
+        
         if (this.editMode) {
             zoomControls.style.display = 'flex';
+            autoDiscoverBtn.style.display = 'block';
         } else {
             zoomControls.style.display = 'none';
+            autoDiscoverBtn.style.display = 'none';
         }
         
         // Update all device elements

@@ -1,0 +1,70 @@
+{
+  "mappings": [
+    {
+      "type": "com.fibaro.binarySwitch",
+      "interface": "light",
+      "property": "isLight",
+      "propertyValue": true,
+      "widget": "light"
+    },
+    {
+      "type": "com.fibaro.binarySwitch",
+      "widget": "binarySwitch"
+    },
+    {
+      "type": "com.fibaro.binarySensor",
+      "widget": "motion"
+    },
+    {
+      "type": "com.fibaro.doorSensor",
+      "widget": "doorSensor"
+    },
+    {
+      "type": "com.fibaro.windowSensor",
+      "widget": "windowSensor"
+    },
+    {
+      "type": "com.fibaro.colorController",
+      "widget": "lightcolor"
+    },
+    {
+      "type": "com.fibaro.doorWindowSensor",
+      "widget": "windowSensor"
+    },
+    {
+      "type": "com.fibaro.multilevelSwitch",
+      "interface": "light",
+      "property": "isLight",
+      "propertyValue": true,
+      "widget": "lightdim"
+    },
+    {
+      "type": "com.fibaro.multilevelSwitch",
+      "widget": "gauge"
+    },
+    {
+      "type": "com.fibaro.doorLock",
+      "widget": "doorLock"
+    },
+    {
+      "type": "com.fibaro.temperatureSensor",
+      "widget": "temperature"
+    },
+    {
+      "type": "com.fibaro.energyMeter",
+      "widget": "energyMeter"
+    },
+    {
+      "type": "com.fibaro.lightSensor",
+      "widget": "lux"
+    },
+    {
+      "type": "com.fibaro.motionSensor",
+      "widget": "motion"
+    },
+    {
+      "type": "com.fibaro.humiditySensor",
+      "widget": "humidity"
+    }
+  ]
+}

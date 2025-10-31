@@ -47,6 +47,23 @@ header h1 {
     border: none;
 }
 
+.auto-discover-btn {
+    padding: 6px 12px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.auto-discover-btn:hover {
+    background: #333;
+    border-color: #4caf50;
+}
+
 .edit-toggle {
     display: flex;
     align-items: center;
@@ -980,3 +997,138 @@ main {
     background: #c0392b;
 }
 
+/* Device Discovery Dialog */
+.device-discovery-dialog {
+    min-width: 600px;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dialog-info {
+    color: #aaa;
+    font-size: 14px;
+    margin-bottom: 20px;
+}
+
+.device-selection-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.device-list {
+    flex: 1;
+    overflow-y: auto;
+    max-height: 400px;
+    border: 1px solid #444;
+    border-radius: 6px;
+    background: #2a2a2a;
+    padding: 10px;
+}
+
+.device-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    transition: all 0.2s;
+}
+
+.device-item:hover {
+    background: #222;
+    border-color: #444;
+}
+
+.device-item input[type="checkbox"] {
+    margin-top: 2px;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.device-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.device-info-full {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.device-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.device-info strong,
+.device-info-full strong {
+    color: #e0e0e0;
+    font-size: 14px;
+}
+
+.unmapped-badge {
+    display: inline-block;
+    padding: 2px 6px;
+    background: #666;
+    color: #ddd;
+    font-size: 11px;
+    border-radius: 3px;
+    font-weight: normal;
+}
+
+.device-meta {
+    color: #888;
+    font-size: 12px;
+}
+
+.device-selectors {
+    display: flex;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.device-widget-selector,
+.device-floor-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+}
+
+.device-widget-selector label,
+.device-floor-selector label {
+    color: #aaa;
+    font-size: 12px;
+    min-width: 50px;
+}
+
+.widget-select,
+.floor-select {
+    flex: 1;
+    padding: 4px 8px;
+    background: #2a2a2a;
+    border: 1px solid #444;
+    border-radius: 4px;
+    color: #e0e0e0;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.widget-select:focus,
+.floor-select:focus {
+    outline: none;
+    border-color: #4caf50;
+}
