@@ -177,6 +177,23 @@ export class FloorManager {
             deviceEl.appendChild(icon);
             deviceEl.appendChild(textEl);
             container.appendChild(deviceEl);
+            
+            // Apply widget background styling if enabled
+            const widgetBg = this.homeMap.homemapConfig?.widgetBackground;
+            if (widgetBg?.enabled) {
+                const bgCircle = document.createElement('div');
+                bgCircle.className = 'device-background';
+                const opacity = (widgetBg.opacity || 50) / 100;
+                
+                // Convert hex color to RGB and apply opacity
+                const hex = widgetBg.color.replace('#', '');
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                
+                bgCircle.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                deviceEl.insertBefore(bgCircle, deviceEl.firstChild);
+            }
         });
         
         // If this is the current floor, sync the map to show only current floor devices

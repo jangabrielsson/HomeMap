@@ -117,6 +117,30 @@
                     <small>Location of your homemapdata folder with config.json</small>
                 </div>
                 
+                <h3>Widget Display</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="enableWidgetBackground">
+                        Enable widget background circles
+                    </label>
+                    <small>Adds a semi-transparent circle behind each widget</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="widgetBackgroundColor">Background Color</label>
+                    <input type="color" id="widgetBackgroundColor" value="#FFFF00">
+                    <small>Color of the background circle</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="widgetBackgroundOpacity">Background Opacity</label>
+                    <div class="slider-group">
+                        <input type="range" id="widgetBackgroundOpacity" min="0" max="100" value="50" step="5">
+                        <span id="opacityValue">50%</span>
+                    </div>
+                    <small>Transparency level (0% = invisible, 100% = opaque)</small>
+                </div>
+                
                 <h3>Widget Packages</h3>
                 <div class="form-group">
                     <button id="installPackageBtn" class="secondary-button">📦 Install Package...</button>

@@ -292,6 +292,33 @@ class HomeMap {
             document.getElementById('houseName').value = this.homemapConfig?.name || '';
             document.getElementById('houseIcon').value = this.homemapConfig?.icon || '🏠';
             
+            // Load widget background settings from config
+            const widgetBg = this.homemapConfig?.widgetBackground || {
+                enabled: true,
+                color: '#FFFF00',
+                opacity: 50
+            };
+            console.log('Widget background config:', widgetBg);
+            
+            document.getElementById('enableWidgetBackground').checked = widgetBg.enabled;
+            
+            // Set color value - ensure it's uppercase hex format
+            const colorValue = (widgetBg.color || '#FFFF00').toUpperCase();
+            const colorInput = document.getElementById('widgetBackgroundColor');
+            console.log('Setting color input to:', colorValue);
+            colorInput.value = colorValue;
+            
+            // Force refresh of color picker by triggering a change event
+            colorInput.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            document.getElementById('widgetBackgroundOpacity').value = widgetBg.opacity || 50;
+            document.getElementById('opacityValue').textContent = `${widgetBg.opacity || 50}%`;
+            
+            // Update opacity display when slider changes
+            document.getElementById('widgetBackgroundOpacity').addEventListener('input', (e) => {
+                document.getElementById('opacityValue').textContent = `${e.target.value}%`;
+            });
+            
             // Load and display installed packages
             await this.loadInstalledPackages();
             
@@ -428,6 +455,27 @@ class HomeMap {
                 this.updateWindowTitle();
             }
             
+            // Update widget background settings in config
+            const enableBackground = document.getElementById('enableWidgetBackground').checked;
+            const backgroundColor = document.getElementById('widgetBackgroundColor').value;
+            const backgroundOpacity = parseInt(document.getElementById('widgetBackgroundOpacity').value);
+            
+            if (this.homemapConfig) {
+                this.homemapConfig.widgetBackground = {
+                    enabled: enableBackground,
+                    color: backgroundColor,
+                    opacity: backgroundOpacity
+                };
+                
+                // Save updated config
+                const filePath = `${this.dataPath}/config.json`;
+                const content = JSON.stringify(this.homemapConfig, null, 4);
+                await this.invoke('save_config', { filePath, content });
+            }
+            
+            // Apply widget background settings immediately
+            this.applyWidgetBackgroundSettings();
+            
             // Reload config so the app uses the new credentials
             this.config = await this.invoke('get_hc3_config');
             console.log('Config reloaded with new credentials');
@@ -491,6 +539,41 @@ class HomeMap {
         this.floorManager.renderFloors();
         
         console.log(`Edit mode: ${this.editMode ? 'ON' : 'OFF'}`);
+    }
+
+    /**
+     * Apply widget background circle settings to all devices
+     */
+    applyWidgetBackgroundSettings() {
+        const widgetBg = this.homemapConfig?.widgetBackground || {
+            enabled: true,
+            color: '#FFFF00',
+            opacity: 50
+        };
+        
+        document.querySelectorAll('.device').forEach(deviceEl => {
+            const existingBg = deviceEl.querySelector('.device-background');
+            if (existingBg) {
+                existingBg.remove();
+            }
+            
+            if (widgetBg.enabled) {
+                const bgCircle = document.createElement('div');
+                bgCircle.className = 'device-background';
+                const opacity = (widgetBg.opacity || 50) / 100;
+                
+                // Convert hex color to RGB and apply opacity
+                const hex = widgetBg.color.replace('#', '');
+                const r = parseInt(hex.substring(0, 2), 16);
+                const g = parseInt(hex.substring(2, 4), 16);
+                const b = parseInt(hex.substring(4, 6), 16);
+                
+                bgCircle.style.backgroundColor = `rgba(${r}, ${g}, ${b}, ${opacity})`;
+                deviceEl.insertBefore(bgCircle, deviceEl.firstChild);
+            }
+        });
+        
+        console.log('Widget background settings applied');
     }
 
     async init() {
@@ -565,6 +648,9 @@ You can also configure floor plans and manage devices once connected!`;
             await this.widgetManager.loadAllAvailableWidgets();
             
             this.floorManager.renderFloors();
+            
+            // Apply widget background settings
+            this.applyWidgetBackgroundSettings();
             
             // Start event polling only if we have devices and auth is not locked
             if (this.homemapConfig.devices && this.homemapConfig.devices.length > 0) {
