@@ -264,10 +264,15 @@ export class EventManager {
         
         // Get the icon and text elements
         const deviceInfo = this.homeMap.deviceIcons.get(deviceId);
-        if (!deviceInfo) return;
+        if (!deviceInfo) {
+            console.warn(`Device ${deviceId} not in deviceIcons map. Available devices:`, Array.from(this.homeMap.deviceIcons.keys()));
+            return;
+        }
         
         const iconElement = deviceInfo.element;
         const textElement = deviceInfo.textElement;
+        
+        console.log(`Re-rendering device ${deviceId} with updated state:`, device.state);
         
         // Re-render with updated state
         await this.homeMap.renderDevice(device, widget, iconElement, textElement);

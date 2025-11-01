@@ -151,13 +151,15 @@ export class FloorManager {
             textEl.style.display = 'none'; // Hidden by default
             
             // Store icon and text elements for event-driven updates
+            // Track which floor each device is on
             this.homeMap.deviceIcons.set(device.id, { 
                 element: icon, 
                 textElement: textEl,
                 device: device,
                 deviceElement: deviceEl,
                 container: container,
-                img: img
+                img: img,
+                floorId: floorId
             });
             
             // Add drag functionality
@@ -176,6 +178,11 @@ export class FloorManager {
             deviceEl.appendChild(textEl);
             container.appendChild(deviceEl);
         });
+        
+        // If this is the current floor, sync the map to show only current floor devices
+        if (floorId === this.homeMap.currentFloor) {
+            this.syncDeviceIconsForCurrentFloor(floorId);
+        }
     }
 
     /**
@@ -275,7 +282,34 @@ export class FloorManager {
         // Update current floor
         this.homeMap.currentFloor = floorId;
         
+        // Update the device icons map to only include devices on this floor
+        // This ensures event updates only affect visible devices
+        this.syncDeviceIconsForCurrentFloor(floorId);
+        
         // Restore zoom level for this floor
         this.homeMap.restoreZoomForFloor(floorId);
+    }
+
+    /**
+     * Sync the deviceIcons map to only include devices on the current floor
+     * Events will then only update visible devices
+     */
+    syncDeviceIconsForCurrentFloor(floorId) {
+        // Create a temporary map with only devices on the current floor
+        const visibleDevices = new Map();
+        
+        for (const [deviceId, deviceInfo] of this.homeMap.deviceIcons) {
+            if (deviceInfo.floorId === floorId) {
+                visibleDevices.set(deviceId, deviceInfo);
+            }
+        }
+        
+        // Replace the map with only visible devices
+        this.homeMap.deviceIcons.clear();
+        for (const [deviceId, deviceInfo] of visibleDevices) {
+            this.homeMap.deviceIcons.set(deviceId, deviceInfo);
+        }
+        
+        console.log(`Synced deviceIcons for floor ${floorId}: ${this.homeMap.deviceIcons.size} devices visible`);
     }
 }
