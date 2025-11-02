@@ -136,7 +136,7 @@ homemapdata/
 ├── icons/
 │   ├── built-in/        # Auto-synced from app (don't edit)
 │   ├── packages/        # Installed icon packages (.hwp files)
-│   ├── myicons/         # Manual icon set (each subfolder = one icon set)
+│   ├── mycustomicon/         # Manual icon set (each subfolder = one icon set)
 │   └── otherset/        # Another manual icon set
 ├── images/              # Floor plan images
 └── config.json          # Main configuration
