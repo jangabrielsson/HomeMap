@@ -7,14 +7,14 @@
         {
             "id": "floor1",
             "name": "First Floor",
-            "image": "images/floor1.jpg",
+            "image": "images/floor1.png",
             "width": 2000,
             "height": 1500
         },
         {
             "id": "floor2",
             "name": "Second Floor",
-            "image": "images/floor2.jpg",
+            "image": "images/floor2.png",
             "width": 2000,
             "height": 1500
         }

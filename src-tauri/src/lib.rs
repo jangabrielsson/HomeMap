@@ -1,7 +1,8 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{Emitter, Manager};
+use tauri::Manager;
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
 use serde::{Deserialize, Serialize};
 use std::env;
@@ -794,6 +795,7 @@ fn is_hc3_configured() -> bool {
     }
 }
 
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
 #[tauri::command]
 async fn select_homemap_folder<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> Result<Option<String>, String> {
     let folder = tauri::async_runtime::spawn(async move {
@@ -806,6 +808,13 @@ async fn select_homemap_folder<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> 
     .map_err(|e| format!("Failed to show dialog: {}", e))?;
     
     Ok(folder.map(|p| p.path().to_string_lossy().to_string()))
+}
+
+#[cfg(any(target_os = "ios", target_os = "android"))]
+#[tauri::command]
+async fn select_homemap_folder<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> Result<Option<String>, String> {
+    // On mobile, return the app's documents directory
+    Err("Folder selection not supported on mobile".to_string())
 }
 
 #[tauri::command]
@@ -1032,13 +1041,19 @@ fn create_backup(source_path: String, dest_path: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init());
+    
+    // Desktop-only plugins
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    let builder = builder
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(tauri_plugin_window_state::Builder::default().build());
+    
+    builder
         .invoke_handler(tauri::generate_handler![
             http_fetch_insecure,
             get_hc3_config, 
@@ -1062,71 +1077,75 @@ pub fn run() {
             is_directory,
             create_backup
         ])
-        .setup(|app| {
-            // Create menu items
-            let toggle_devtools = MenuItemBuilder::with_id("toggle_devtools", "Toggle DevTools")
-                .accelerator("CmdOrCtrl+Shift+I")
-                .build(app)?;
-            
-            let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
-                .build(app)?;
-            
-            let about = MenuItemBuilder::with_id("about", "About HomeMap")
-                .build(app)?;
-            
-            // Create app menu (first menu on macOS)
-            let app_menu = SubmenuBuilder::new(app, "HomeMap")
-                .item(&about)
-                .item(&check_updates)
-                .separator()
-                .item(&PredefinedMenuItem::services(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::hide(app, None)?)
-                .item(&PredefinedMenuItem::hide_others(app, None)?)
-                .item(&PredefinedMenuItem::show_all(app, None)?)
-                .separator()
-                .item(&PredefinedMenuItem::quit(app, None)?)
-                .build()?;
-            
-            let view_menu = SubmenuBuilder::new(app, "View")
-                .item(&toggle_devtools)
-                .build()?;
-            
-            let menu = Menu::new(app)?;
-            menu.append(&app_menu)?;
-            menu.append(&view_menu)?;
-            
-            app.set_menu(menu)?;
-            
-            // Handle menu events
-            app.on_menu_event(move |app, event| {
-                println!("Menu event triggered: {:?}", event.id());
-                if event.id() == "toggle_devtools" {
-                    println!("Toggle devtools event received");
-                    if let Some(window) = app.get_webview_window("main") {
-                        println!("Got window 'main'");
-                        if window.is_devtools_open() {
-                            println!("Closing devtools");
-                            window.close_devtools();
+        .setup(|_app| {
+            // Desktop-only: Create menu
+            #[cfg(not(any(target_os = "ios", target_os = "android")))]
+            {
+                // Create menu items
+                let toggle_devtools = MenuItemBuilder::with_id("toggle_devtools", "Toggle DevTools")
+                    .accelerator("CmdOrCtrl+Shift+I")
+                    .build(_app)?;
+                
+                let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
+                    .build(app)?;
+                
+                let about = MenuItemBuilder::with_id("about", "About HomeMap")
+                    .build(app)?;
+                
+                // Create app menu (first menu on macOS)
+                let app_menu = SubmenuBuilder::new(app, "HomeMap")
+                    .item(&about)
+                    .item(&check_updates)
+                    .separator()
+                    .item(&PredefinedMenuItem::services(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::hide(app, None)?)
+                    .item(&PredefinedMenuItem::hide_others(app, None)?)
+                    .item(&PredefinedMenuItem::show_all(app, None)?)
+                    .separator()
+                    .item(&PredefinedMenuItem::quit(app, None)?)
+                    .build()?;
+                
+                let view_menu = SubmenuBuilder::new(app, "View")
+                    .item(&toggle_devtools)
+                    .build()?;
+                
+                let menu = Menu::new(app)?;
+                menu.append(&app_menu)?;
+                menu.append(&view_menu)?;
+                
+                app.set_menu(menu)?;
+                
+                // Handle menu events
+                app.on_menu_event(move |app, event| {
+                    println!("Menu event triggered: {:?}", event.id());
+                    if event.id() == "toggle_devtools" {
+                        println!("Toggle devtools event received");
+                        if let Some(window) = app.get_webview_window("main") {
+                            println!("Got window 'main'");
+                            if window.is_devtools_open() {
+                                println!("Closing devtools");
+                                window.close_devtools();
+                            } else {
+                                println!("Opening devtools");
+                                window.open_devtools();
+                            }
                         } else {
-                            println!("Opening devtools");
-                            window.open_devtools();
+                            println!("Could not find window 'main'");
                         }
-                    } else {
-                        println!("Could not find window 'main'");
+                    } else if event.id() == "check-for-updates" {
+                        println!("Check for updates event received");
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("check-for-updates", ());
+                        }
+                    } else if event.id().as_ref() == "about" {
+                        println!("About event received");
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.emit("show-about", ());
+                        }
                     }
-                } else if event.id() == "check-for-updates" {
-                    println!("Check for updates event received");
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.emit("check-for-updates", ());
-                    }
-                } else if event.id().as_ref() == "about" {
-                    println!("About event received");
-                    if let Some(window) = app.get_webview_window("main") {
-                        let _ = window.emit("show-about", ());
-                    }
-                }
-            });
+                });
+            }
             
             Ok(())
         })
