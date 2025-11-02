@@ -154,6 +154,12 @@ class HomeMap {
             await this.browseHomemapPath();
         });
         
+        // Backup HomeMap button
+        const backupHomemapBtn = document.getElementById('backupHomemapBtn');
+        backupHomemapBtn.addEventListener('click', async () => {
+            await this.backupHomeMapData();
+        });
+        
         // Install package button
         const installPackageBtn = document.getElementById('installPackageBtn');
         installPackageBtn.addEventListener('click', async () => {
@@ -513,6 +519,46 @@ class HomeMap {
         }
     }
 
+    async backupHomeMapData() {
+        try {
+            if (!this.dataPath) {
+                alert('HomeMap data path not loaded yet.');
+                return;
+            }
+
+            // Generate backup filename with timestamp
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[:.]/g, '-').split('T')[0];
+            const defaultFilename = `homemap-backup-${timestamp}.zip`;
+
+            // Show save dialog
+            const savePath = await window.__TAURI__.dialog.save({
+                defaultPath: defaultFilename,
+                filters: [{
+                    name: 'Zip Archive',
+                    extensions: ['zip']
+                }]
+            });
+
+            if (!savePath) {
+                // User cancelled
+                return;
+            }
+
+            // Call backend to create backup
+            console.log('Creating backup from:', this.dataPath, 'to:', savePath);
+            await this.invoke('create_backup', { 
+                sourcePath: this.dataPath, 
+                destPath: savePath 
+            });
+
+            alert('Backup created successfully!\n\nLocation: ' + savePath);
+        } catch (error) {
+            console.error('Failed to create backup:', error);
+            alert('Failed to create backup: ' + error);
+        }
+    }
+
     toggleEditMode() {
         // Show/hide zoom controls and auto-discover button
         const zoomControls = document.getElementById('zoomControls');
@@ -637,6 +683,23 @@ You can also configure floor plans and manage devices once connected!`;
             
             this.homemapConfig = await this.invoke('get_homemap_config');
             console.log('HomeMap config:', this.homemapConfig);
+            
+            // Ensure at least one floor exists - create default if none
+            if (!this.homemapConfig.floors || this.homemapConfig.floors.length === 0) {
+                console.warn('No floors found in config, creating default floor');
+                this.homemapConfig.floors = [{
+                    id: 'default-floor',
+                    name: 'Main Floor',
+                    image: 'images/default-floor.png'
+                }];
+                
+                // Save the updated config
+                const filePath = `${this.dataPath}/config.json`;
+                const content = JSON.stringify(this.homemapConfig, null, 4);
+                await this.invoke('save_config', { filePath, content });
+                
+                alert('No floors were found in your configuration.\n\nA default floor "Main Floor" has been created.\n\nYou can edit it or add more floors in Edit Mode.');
+            }
             
             // Update window title and header
             await this.updateAppTitle();

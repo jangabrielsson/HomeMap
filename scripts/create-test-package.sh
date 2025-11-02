@@ -5,7 +5,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-HOMEMAP_DATA="${PROJECT_ROOT}/homemapdata"
+HOMEMAP_DATA="${PROJECT_ROOT}/homemapdata.example"
 
 # Package details
 PACKAGE_ID="com.jangabrielsson.gauge"
@@ -44,8 +44,8 @@ EOF
 
 # Copy widget definition
 mkdir -p "$TEMP_DIR/widgets"
-cp "$HOMEMAP_DATA/widgets/gauge.json" "$TEMP_DIR/widgets/" 2>/dev/null || {
-    echo "Error: gauge.json not found in $HOMEMAP_DATA/widgets/"
+cp "$HOMEMAP_DATA/widgets/built-in/gauge.json" "$TEMP_DIR/widgets/" 2>/dev/null || {
+    echo "Error: gauge.json not found in $HOMEMAP_DATA/widgets/built-in/"
     echo "Please ensure the gauge widget exists first."
     rm -rf "$TEMP_DIR"
     exit 1
@@ -53,7 +53,7 @@ cp "$HOMEMAP_DATA/widgets/gauge.json" "$TEMP_DIR/widgets/" 2>/dev/null || {
 
 # Copy icon set
 mkdir -p "$TEMP_DIR/icons"
-cp -r "$HOMEMAP_DATA/icons/gauge" "$TEMP_DIR/icons/" 2>/dev/null || {
+cp -r "$HOMEMAP_DATA/icons/built-in/gauge" "$TEMP_DIR/icons/" 2>/dev/null || {
     echo "Warning: gauge icon set not found, package will not include icons"
 }
 

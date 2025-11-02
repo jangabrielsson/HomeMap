@@ -131,15 +131,27 @@ If you want to create custom widgets or icons, you can work directly with the `h
 homemapdata/
 ├── widgets/
 │   ├── built-in/        # Auto-synced from app (don't edit)
-│   └── packages/        # Your custom widgets go here
+│   ├── packages/        # Installed widget packages (.hwp files)
+│   └── mywidget.json    # Manual widgets (top-level)
 ├── icons/
 │   ├── built-in/        # Auto-synced from app (don't edit)
-│   └── packages/        # Your custom icons go here
+│   ├── packages/        # Installed icon packages (.hwp files)
+│   └── myicons/         # Manual icon sets (top-level)
 ├── images/              # Floor plan images
 └── config.json          # Main configuration
 ```
 
-**Important:** The `built-in/` folders are automatically synced from the app on startup. Any changes will be overwritten. Place custom content in the `packages/` folders.
+**Widget & Icon Installation:**
+
+There are two ways to add custom widgets and icons:
+
+1. **Package Installation (Recommended)**: Install `.hwp` (HomeMap Widget Package) files through the UI. These are stored in `packages/` with unique URIs to prevent naming conflicts.
+
+2. **Manual Installation**: Place widget JSON files directly in the `widgets/` folder, or icon folders directly in the `icons/` folder. You'll need to manage naming conflicts yourself if multiple widgets/icons use the same names.
+
+**Important:** The `built-in/` folders are automatically synced from the app on startup. Any changes will be overwritten. Place custom content either as packages or at the top level of `widgets/` or `icons/`.
+
+**Note:** Icons are typically added manually by users, while widgets can be distributed as packages for easier sharing.
 
 ### Custom Icons
 
@@ -164,7 +176,7 @@ You can use custom icons with any widget by specifying device-level parameters. 
 }
 ```
 
-Place your custom icons in `homemapdata/icons/packages/myCustomLights/` and the device will use them instead of the widget's default icons. See **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** for complete guide.
+Place your custom icons in `homemapdata/icons/myCustomLights/` and the device will use them instead of the widget's default icons. See **[docs/CUSTOM_ICONS.md](docs/CUSTOM_ICONS.md)** for complete guide.
 
 ### Widget Definition Example
 

@@ -161,6 +161,14 @@ export class ContextMenuManager {
         deleteFloorBtn.replaceWith(newDeleteBtn);
         addFloorBtn.replaceWith(newAddBtn);
 
+        // Disable delete button if this is the last floor
+        const isLastFloor = this.homeMap.homemapConfig.floors.length <= 1;
+        if (isLastFloor) {
+            newDeleteBtn.style.opacity = '0.5';
+            newDeleteBtn.style.cursor = 'not-allowed';
+            newDeleteBtn.title = 'Cannot delete the last floor';
+        }
+
         newEditBtn.addEventListener('click', () => {
             this.hideContextMenu();
             this.homeMap.floorManagementDialog.showEditFloorDialog(floor);
@@ -168,7 +176,9 @@ export class ContextMenuManager {
 
         newDeleteBtn.addEventListener('click', () => {
             this.hideContextMenu();
-            this.homeMap.floorManagementDialog.deleteFloor(floor);
+            if (!isLastFloor) {
+                this.homeMap.floorManagementDialog.deleteFloor(floor);
+            }
         });
 
         newAddBtn.addEventListener('click', () => {

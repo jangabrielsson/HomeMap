@@ -1706,6 +1706,7 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "walkdir",
  "zip 2.4.2",
 ]
 

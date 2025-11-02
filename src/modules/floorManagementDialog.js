@@ -486,6 +486,12 @@ export class FloorManagementDialog {
      * Delete a floor
      */
     async deleteFloor(floor) {
+        // Check if this is the last floor
+        if (this.app.homemapConfig.floors.length <= 1) {
+            alert(`Cannot delete the last floor.\n\nThe app requires at least one floor. You can edit this floor instead.`);
+            return;
+        }
+        
         // Check if floor has devices
         const devicesOnFloor = this.app.homemapConfig.devices.filter(d => d.floor_id === floor.id);
         

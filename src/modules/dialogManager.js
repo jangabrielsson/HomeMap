@@ -25,7 +25,12 @@ export class DialogManager {
                 builtInDirs.forEach(dir => {
                     if (dir.endsWith('/')) {
                         const name = dir.slice(0, -1);
-                        iconSets.push({ name, location: 'built-in', path: `icons/built-in/${name}` });
+                        iconSets.push({ 
+                            name, 
+                            location: 'built-in', 
+                            path: `icons/built-in/${name}`,
+                            packageId: 'com.fibaro.built-in'
+                        });
                     }
                 });
             } catch (e) {
@@ -41,7 +46,12 @@ export class DialogManager {
                 iconDirs.forEach(dir => {
                     if (dir.endsWith('/') && dir !== 'built-in/' && dir !== 'packages/') {
                         const name = dir.slice(0, -1);
-                        iconSets.push({ name, location: 'user', path: `icons/${name}` });
+                        iconSets.push({ 
+                            name, 
+                            location: 'user', 
+                            path: `icons/${name}`,
+                            packageId: null // No package for user-installed top-level icons
+                        });
                     }
                 });
             } catch (e) {
@@ -63,7 +73,12 @@ export class DialogManager {
                             iconSetDirs.forEach(dir => {
                                 if (dir.endsWith('/')) {
                                     const name = dir.slice(0, -1);
-                                    iconSets.push({ name, location: `package: ${pkgName}`, path: `icons/packages/${pkgName}/${name}` });
+                                    iconSets.push({ 
+                                        name, 
+                                        location: `package: ${pkgName}`, 
+                                        path: `icons/packages/${pkgName}/${name}`,
+                                        packageId: pkgName
+                                    });
                                 }
                             });
                         } catch (e) {
@@ -417,6 +432,14 @@ export class DialogManager {
         // Discover available icon sets
         const iconSets = await this.discoverIconSets();
         const currentIconSet = device.params?.iconSet || '';
+        const currentIconPackage = device.params?.iconPackage || null;
+        
+        // Build current qualified name for comparison
+        let currentQualified = '';
+        if (currentIconSet) {
+            currentQualified = currentIconPackage ? `${currentIconPackage}:${currentIconSet}` : currentIconSet;
+        }
+        
         let iconSetOptions = '<option value="">Use widget default icons</option>';
         if (iconSets.length > 0) {
             const grouped = {};
@@ -428,8 +451,10 @@ export class DialogManager {
             for (const [location, sets] of Object.entries(grouped)) {
                 iconSetOptions += `<optgroup label="${location.charAt(0).toUpperCase() + location.slice(1)}">`;
                 sets.forEach(set => {
-                    const selected = set.name === currentIconSet ? 'selected' : '';
-                    iconSetOptions += `<option value="${set.name}" ${selected}>${set.name}</option>`;
+                    // Use qualified name: packageId:iconSetName (or just iconSetName if no package)
+                    const qualifiedValue = set.packageId ? `${set.packageId}:${set.name}` : set.name;
+                    const selected = qualifiedValue === currentQualified ? 'selected' : '';
+                    iconSetOptions += `<option value="${qualifiedValue}" ${selected}>${set.name}</option>`;
                 });
                 iconSetOptions += '</optgroup>';
             }
@@ -521,16 +546,32 @@ export class DialogManager {
                     device.name = newName;
                     device.type = actualType;
                     
-                    // Handle custom parameters
+                    // Handle custom parameters - parse qualified icon set name
                     if (customIconSet) {
                         if (!configDevice.params) configDevice.params = {};
                         if (!device.params) device.params = {};
-                        configDevice.params.iconSet = customIconSet;
-                        device.params.iconSet = customIconSet;
+                        
+                        // Parse qualified name: "packageId:iconSetName" or just "iconSetName"
+                        if (customIconSet.includes(':')) {
+                            const [packageId, iconSetName] = customIconSet.split(':', 2);
+                            configDevice.params.iconSet = iconSetName;
+                            configDevice.params.iconPackage = packageId;
+                            device.params.iconSet = iconSetName;
+                            device.params.iconPackage = packageId;
+                        } else {
+                            // No package qualifier - top-level user icon set
+                            configDevice.params.iconSet = customIconSet;
+                            device.params.iconSet = customIconSet;
+                            // Remove iconPackage if it was previously set
+                            if (configDevice.params.iconPackage) delete configDevice.params.iconPackage;
+                            if (device.params.iconPackage) delete device.params.iconPackage;
+                        }
                     } else {
-                        // Remove iconSet if empty
+                        // Remove iconSet and iconPackage if empty
                         if (configDevice.params?.iconSet) delete configDevice.params.iconSet;
                         if (device.params?.iconSet) delete device.params.iconSet;
+                        if (configDevice.params?.iconPackage) delete configDevice.params.iconPackage;
+                        if (device.params?.iconPackage) delete device.params.iconPackage;
                         // Clean up empty params object
                         if (configDevice.params && Object.keys(configDevice.params).length === 0) delete configDevice.params;
                         if (device.params && Object.keys(device.params).length === 0) delete device.params;

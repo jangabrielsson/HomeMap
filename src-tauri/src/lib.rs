@@ -973,6 +973,63 @@ fn is_directory(path: String) -> Result<bool, String> {
     Ok(std::path::Path::new(&path).is_dir())
 }
 
+#[tauri::command]
+fn create_backup(source_path: String, dest_path: String) -> Result<(), String> {
+    use std::fs::File;
+    use zip::write::{FileOptions, ZipWriter};
+    use walkdir::WalkDir;
+    
+    let source = PathBuf::from(&source_path);
+    let dest = PathBuf::from(&dest_path);
+    
+    // Create zip file
+    let file = File::create(&dest)
+        .map_err(|e| format!("Failed to create backup file: {}", e))?;
+    
+    let mut zip = ZipWriter::new(file);
+    let options: FileOptions<()> = FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o755);
+    
+    // Walk through source directory and add files to zip
+    for entry in WalkDir::new(&source).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let name = path.strip_prefix(&source)
+            .map_err(|e| format!("Failed to strip prefix: {}", e))?;
+        
+        // Skip the root directory itself
+        if name.as_os_str().is_empty() {
+            continue;
+        }
+        
+        let name_str = name.to_str()
+            .ok_or_else(|| "Invalid UTF-8 in path".to_string())?;
+        
+        if path.is_file() {
+            println!("Adding file to backup: {}", name_str);
+            zip.start_file(name_str, options)
+                .map_err(|e| format!("Failed to start file in zip: {}", e))?;
+            
+            let file_data = fs::read(path)
+                .map_err(|e| format!("Failed to read file {}: {}", name_str, e))?;
+            
+            use std::io::Write;
+            zip.write_all(&file_data)
+                .map_err(|e| format!("Failed to write file to zip: {}", e))?;
+        } else if path.is_dir() {
+            println!("Adding directory to backup: {}", name_str);
+            zip.add_directory(name_str, options)
+                .map_err(|e| format!("Failed to add directory to zip: {}", e))?;
+        }
+    }
+    
+    zip.finish()
+        .map_err(|e| format!("Failed to finalize zip: {}", e))?;
+    
+    println!("Backup created successfully at: {}", dest_path);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1002,7 +1059,8 @@ pub fn run() {
             copy_file,
             create_dir,
             path_exists,
-            is_directory
+            is_directory,
+            create_backup
         ])
         .setup(|app| {
             // Create menu items
