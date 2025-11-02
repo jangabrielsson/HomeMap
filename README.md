@@ -132,11 +132,12 @@ homemapdata/
 ├── widgets/
 │   ├── built-in/        # Auto-synced from app (don't edit)
 │   ├── packages/        # Installed widget packages (.hwp files)
-│   └── mywidget.json    # Manual widgets (top-level)
+│   └── mywidget.json    # Manual widgets (place at this level)
 ├── icons/
 │   ├── built-in/        # Auto-synced from app (don't edit)
 │   ├── packages/        # Installed icon packages (.hwp files)
-│   └── myicons/         # Manual icon sets (top-level)
+│   ├── myicons/         # Manual icon set (each subfolder = one icon set)
+│   └── otherset/        # Another manual icon set
 ├── images/              # Floor plan images
 └── config.json          # Main configuration
 ```
