@@ -4,11 +4,17 @@
 use tauri::Manager;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+#[cfg(not(any(target_os = "ios", target_os = "android")))]
+use tauri::Emitter;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::path::PathBuf;
 use std::fs;
 use std::collections::HashMap;
+use base64::Engine;
+
+#[cfg(target_os = "android")]
+use tauri_plugin_fs::FsExt;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct HttpFetchResponse {
@@ -146,6 +152,23 @@ fn get_homemap_data_path() -> Result<PathBuf, String> {
     }
     
     // Create default location in app data directory
+    #[cfg(target_os = "android")]
+    let data_dir = {
+        // On Android, use /data/data/<package>/files/homemapdata
+        PathBuf::from("/data/data/com.gabrielsson.homemap/files/homemapdata")
+    };
+    
+    #[cfg(target_os = "ios")]
+    let data_dir = {
+        // On iOS, use Documents directory (writable)
+        // The path is typically: /Users/.../Library/Developer/CoreSimulator/Devices/{UUID}/data/Containers/Data/Application/{UUID}/Documents
+        // On device it's: /var/mobile/Containers/Data/Application/{UUID}/Documents
+        use std::env;
+        let home = env::var("HOME").unwrap_or_else(|_| String::from("/"));
+        PathBuf::from(home).join("Documents").join("homemapdata")
+    };
+    
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let data_dir = dirs::data_dir()
         .ok_or("Could not find data directory")?
         .join("HomeMap")
@@ -187,12 +210,18 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
             Err(e) => {
                 println!("Warning: Could not find template directory: {}", e);
                 println!("Creating minimal config.json...");
+                println!("NOTE: On Android, built-in widgets/icons are not available without template extraction");
+                println!("TODO: Implement Android APK asset extraction for homemapdata.example");
                 
-                // Create a minimal config.json if template not found
+                // Create a minimal config.json with default floor if template not found
                 let minimal_config = serde_json::json!({
                     "name": "HomeMap",
                     "icon": "🏠",
-                    "floors": [],
+                    "floors": [{
+                        "id": "default-floor",
+                        "name": "Main Floor",
+                        "image": "images/default-floor.png"
+                    }],
                     "devices": []
                 });
                 
@@ -208,6 +237,36 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
                     .map_err(|e| format!("Failed to create icons directory: {}", e))?;
                 fs::create_dir_all(data_dir.join("icons").join("packages"))
                     .map_err(|e| format!("Failed to create icons/packages directory: {}", e))?;
+                fs::create_dir_all(data_dir.join("images"))
+                    .map_err(|e| format!("Failed to create images directory: {}", e))?;
+                
+                // On mobile, embed the default floor image at compile time
+                let default_floor_path = data_dir.join("images").join("default-floor.png");
+                if !default_floor_path.exists() {
+                    println!("Creating default floor image from embedded resource");
+                    
+                    #[cfg(any(target_os = "android", target_os = "ios"))]
+                    {
+                        // Embed the actual default floor image from homemapdata.example
+                        let embedded_floor = include_bytes!("../../homemapdata.example/images/default-floor.png");
+                        fs::write(&default_floor_path, embedded_floor)
+                            .map_err(|e| format!("Failed to write embedded floor image: {}", e))?;
+                        println!("Wrote embedded floor image ({} bytes)", embedded_floor.len());
+                    }
+                    
+                    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                    {
+                        // Desktop doesn't need embedded - it uses template directory
+                        println!("Skipping floor image on desktop (uses template)");
+                    }
+                }
+                
+                // On mobile, JavaScript will copy bundled assets from asset:// protocol
+                // No need to embed widgets here anymore
+                #[cfg(any(target_os = "android", target_os = "ios"))]
+                {
+                    println!("Mobile platform - widgets will be copied via asset extraction");
+                }
                 
                 println!("Created minimal homemapdata structure");
             }
@@ -347,8 +406,80 @@ fn sync_builtin_resources_from_template(template_dir: &PathBuf, data_dir: &PathB
     Ok(())
 }
 
+// Extract bundled resources on Android/iOS from APK assets  
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn extract_bundled_template(_app: &tauri::AppHandle, dest_dir: &PathBuf) -> Result<(), String> {
+    println!("Attempting to extract bundled template resources...");
+    
+    let resolver = _app.path();
+    
+    // Get the resource directory (will be asset:// URL on Android)
+    if let Ok(resource_dir) = resolver.resource_dir() {
+        println!("Resource directory: {:?}", resource_dir);
+        
+        #[cfg(target_os = "android")]
+        {
+            // On Android, we need to copy files from asset:// to filesystem
+            // The assets are at asset://localhost/homemapdata.example/*
+            // JavaScript will handle copying via fetch + write_file_base64
+            
+            println!("Android: Assets will be copied by JavaScript using asset:// protocol");
+            return Err("Android asset extraction handled by JavaScript".to_string());
+        }
+        
+        #[cfg(target_os = "ios")]
+        {
+            let template_in_resources = resource_dir.join("homemapdata.example");
+            println!("Looking for template at: {:?}", template_in_resources);
+            
+            if template_in_resources.exists() {
+                println!("Found template in resources, copying to {:?}", dest_dir);
+                copy_dir_recursive(&template_in_resources, dest_dir)
+                    .map_err(|e| format!("Failed to copy template from resources: {}", e))?;
+                println!("Successfully extracted template from app resources");
+                return Ok(());
+            }
+        }
+    }
+    
+    Err("Could not extract bundled template".to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn extract_bundled_template(_app: &tauri::AppHandle, _dest_dir: &PathBuf) -> Result<(), String> {
+    // Not needed on desktop
+    Err("Not applicable on desktop platforms".to_string())
+}
+
 fn find_template_directory() -> Result<PathBuf, String> {
     println!("Searching for homemapdata.example template...");
+    
+    // On Android/iOS, check if we can access via resource directory
+    // Tauri bundles resources in assets/_up_/ on Android
+    #[cfg(target_os = "android")]
+    {
+        // Try common Android asset extraction paths
+        let android_paths = [
+            // Where Tauri might extract assets
+            "/data/data/com.gabrielsson.homemap/cache/_up_/homemapdata.example",
+            "/data/data/com.gabrielsson.homemap/files/_up_/homemapdata.example",
+            // Direct APK assets (won't work but try anyway)
+            "/data/app/com.gabrielsson.homemap/base.apk/assets/_up_/homemapdata.example",
+        ];
+        
+        for path in &android_paths {
+            let template = PathBuf::from(path);
+            println!("Checking Android path: {:?}", template);
+            if template.exists() {
+                println!("Found template at: {:?}", template);
+                return Ok(template);
+            }
+        }
+        
+        // On Android, assets are in the APK and need to be extracted
+        // For now, this will fail and we'll use the fallback
+        println!("Template not found in Android paths, will use minimal fallback");
+    }
     
     // First try exe directory (for built app)
     if let Ok(exe_path) = env::current_exe() {
@@ -746,6 +877,21 @@ fn get_app_settings() -> Result<AppSettings, String> {
     }
     
     // Return defaults if no saved settings
+    // On mobile platforms, use the same path as get_homemap_data_path
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    let default_homemap_path = {
+        #[cfg(target_os = "ios")]
+        let path = dirs::document_dir()
+            .ok_or("Could not find document directory")?
+            .join("homemapdata");
+        
+        #[cfg(target_os = "android")]
+        let path = PathBuf::from("/data/data/com.gabrielsson.homemap/files/homemapdata");
+        
+        path.to_string_lossy().to_string()
+    };
+    
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let default_homemap_path = dirs::data_dir()
         .ok_or("Could not find data directory")?
         .join("HomeMap")
@@ -766,7 +912,22 @@ fn get_app_settings() -> Result<AppSettings, String> {
 
 #[tauri::command]
 fn save_app_settings(settings: AppSettings) -> Result<(), String> {
-    // Save to app config directory
+    // Save to app config directory (platform-specific)
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    let config_dir = {
+        #[cfg(target_os = "ios")]
+        let dir = dirs::document_dir()
+            .ok_or("Could not find document directory")?
+            .join(".config")
+            .join("HomeMap");
+        
+        #[cfg(target_os = "android")]
+        let dir = PathBuf::from("/data/data/com.gabrielsson.homemap/files/.config/HomeMap");
+        
+        dir
+    };
+    
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let config_dir = dirs::config_dir()
         .ok_or("Could not find config directory")?
         .join("HomeMap");
@@ -819,6 +980,22 @@ async fn select_homemap_folder<R: tauri::Runtime>(_app: tauri::AppHandle<R>) -> 
 
 #[tauri::command]
 fn load_app_settings() -> Result<Option<AppSettings>, String> {
+    // Load from app config directory (platform-specific)
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    let config_dir = {
+        #[cfg(target_os = "ios")]
+        let dir = dirs::document_dir()
+            .ok_or("Could not find document directory")?
+            .join(".config")
+            .join("HomeMap");
+        
+        #[cfg(target_os = "android")]
+        let dir = PathBuf::from("/data/data/com.gabrielsson.homemap/files/.config/HomeMap");
+        
+        dir
+    };
+    
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
     let config_dir = dirs::config_dir()
         .ok_or("Could not find config directory")?
         .join("HomeMap");
@@ -836,6 +1013,111 @@ fn load_app_settings() -> Result<Option<AppSettings>, String> {
         .map_err(|e| format!("Failed to parse settings: {}", e))?;
     
     Ok(Some(settings))
+}
+
+#[tauri::command]
+fn write_file_base64(file_path: String, b64: String) -> Result<(), String> {
+    // Decode base64 and write binary file to given filesystem path
+    use base64::engine::general_purpose::STANDARD as BASE64_STD;
+    match BASE64_STD.decode(&b64) {
+        Ok(bytes) => {
+            let path = std::path::PathBuf::from(&file_path);
+            if let Some(parent) = path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent dirs: {}", e))?;
+                }
+            }
+            std::fs::write(&path, &bytes).map_err(|e| format!("Failed to write file {}: {}", file_path, e))?;
+            println!("Wrote file from base64 to: {}", file_path);
+            Ok(())
+        }
+        Err(e) => Err(format!("Base64 decode error: {}", e)),
+    }
+}
+
+// Read bundled asset file and return as base64
+// Used to access files from APK assets that aren't accessible via fetch()
+#[tauri::command]
+fn read_bundled_asset(app: tauri::AppHandle, asset_path: String) -> Result<String, String> {
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD as BASE64_STD;
+    
+    #[cfg(target_os = "android")]
+    {
+        // On Android, read from the APK zip file directly
+        if asset_path == "asset-manifest.json" {
+            // Embed manifest at compile time since it's small  
+            let embedded_manifest = include_bytes!("../../homemapdata.example/asset-manifest.json");
+            println!("Returning embedded manifest: {} bytes", embedded_manifest.len());
+            return Ok(BASE64_STD.encode(embedded_manifest));
+        }
+        
+        println!("Reading {} from APK...", asset_path);
+        
+        // Get the APK path from the Android context
+        // The app's code path contains the APK location
+        use std::env;
+        let apk_path = env::var("ANDROID_APP_PATH")
+            .or_else(|_| {
+                // Fallback: try to find base.apk by reading /proc/self/maps
+                let maps = std::fs::read_to_string("/proc/self/maps")
+                    .map_err(|e| format!("Failed to read /proc/self/maps: {}", e))?;
+                
+                for line in maps.lines() {
+                    if line.contains("base.apk") {
+                        // The line format is: <address-range> <perms> <offset> <dev> <inode> <spaces> <path>
+                        // We need to extract the path which comes after a lot of spaces
+                        if let Some(path_start) = line.rfind("/data/app/") {
+                            // From the start of /data/app/ to the end of the line is the path
+                            let path = &line[path_start..].trim_end();
+                            println!("Using APK path: {}", path);
+                            return Ok(path.to_string());
+                        }
+                    }
+                }
+                Err("APK path not found in /proc/self/maps".to_string())
+            })?;
+        
+        println!("Using APK path: {}", apk_path);
+        
+        use std::fs::File;
+        use std::io::Read;
+        use zip::ZipArchive;
+        
+        let file = File::open(&apk_path)
+            .map_err(|e| format!("Failed to open APK at {}: {}", apk_path, e))?;
+        
+        let mut archive = ZipArchive::new(file)
+            .map_err(|e| format!("Failed to read APK as zip: {}", e))?;
+        
+        let asset_path_in_apk = format!("assets/_up_/homemapdata.example/{}", asset_path);
+        
+        let mut zip_file = archive.by_name(&asset_path_in_apk)
+            .map_err(|e| format!("Asset not found in APK: {} ({})", asset_path_in_apk, e))?;
+        
+        let mut buffer = Vec::new();
+        zip_file.read_to_end(&mut buffer)
+            .map_err(|e| format!("Failed to read from APK: {}", e))?;
+        
+        println!("Successfully read {} bytes for {} from APK zip", buffer.len(), asset_path);
+        Ok(BASE64_STD.encode(&buffer))
+    }
+    
+    #[cfg(not(target_os = "android"))]
+    {
+        // On desktop, read from filesystem
+        let resolver = app.path();
+        let resource_dir = resolver.resource_dir()
+            .map_err(|e| format!("Failed to get resource dir: {}", e))?;
+        let full_path = resource_dir.join("homemapdata.example").join(&asset_path);
+        
+        println!("Reading desktop asset from: {:?}", full_path);
+        
+        let bytes = std::fs::read(&full_path)
+            .map_err(|e| format!("Failed to read asset {}: {}", asset_path, e))?;
+        
+        Ok(BASE64_STD.encode(&bytes))
+    }
 }
 
 // Package management structures
@@ -1061,6 +1343,8 @@ pub fn run() {
             get_homemap_config, 
             get_data_path, 
             read_image_as_base64,
+            write_file_base64,
+            read_bundled_asset,
             read_file_as_text,
             read_widget_json,
             list_directory,
@@ -1077,14 +1361,54 @@ pub fn run() {
             is_directory,
             create_backup
         ])
-        .setup(|_app| {
+        .setup(|app| {
+            // Mobile: Initialize data directory with bundled resources
+            #[cfg(any(target_os = "ios", target_os = "android"))]
+            {
+                println!("Mobile platform detected, initializing data directory...");
+                
+                #[cfg(target_os = "android")]
+                let data_dir = PathBuf::from("/data/data/com.gabrielsson.homemap/files/homemapdata");
+                
+                #[cfg(target_os = "ios")]
+                let data_dir = {
+                    use std::env;
+                    let home = env::var("HOME").unwrap_or_else(|_| String::from("/"));
+                    PathBuf::from(home).join("Documents").join("homemapdata")
+                };
+                
+                if !data_dir.exists() {
+                    println!("Creating homemapdata directory: {:?}", data_dir);
+                    if let Err(e) = fs::create_dir_all(&data_dir) {
+                        eprintln!("Failed to create data directory: {}", e);
+                    } else {
+                        // Try to extract bundled template resources
+                        match extract_bundled_template(&app.handle(), &data_dir) {
+                            Ok(_) => {
+                                println!("Successfully initialized from bundled resources");
+                            }
+                            Err(e) => {
+                                eprintln!("Could not extract bundled resources: {}", e);
+                                eprintln!("Falling back to minimal initialization");
+                                // Fall back to minimal config creation
+                                if let Err(e2) = initialize_default_config(&data_dir) {
+                                    eprintln!("Failed to create minimal config: {}", e2);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    println!("Data directory already exists: {:?}", data_dir);
+                }
+            }
+            
             // Desktop-only: Create menu
             #[cfg(not(any(target_os = "ios", target_os = "android")))]
             {
                 // Create menu items
                 let toggle_devtools = MenuItemBuilder::with_id("toggle_devtools", "Toggle DevTools")
                     .accelerator("CmdOrCtrl+Shift+I")
-                    .build(_app)?;
+                    .build(app)?;
                 
                 let check_updates = MenuItemBuilder::with_id("check-for-updates", "Check for Updates...")
                     .build(app)?;

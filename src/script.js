@@ -635,8 +635,13 @@ class HomeMap {
             if (!isConfigured) {
                 console.log('Showing welcome dialog...');
                 // Show welcome dialog for first-time users
-                await this.showWelcomeDialog();
-                // Still load the HomeMap config but don't try to connect
+                this.showWelcomeDialog().then(() => {
+                    console.log('Welcome dialog closed');
+                }).catch(err => {
+                    console.error('Welcome dialog error:', err);
+                });
+                // Load the HomeMap config immediately (don't wait for dialog)
+                console.log('Loading HomeMap config (unconfigured path)...');
                 await this.loadHomeMapConfig();
                 this.hc3ApiManager.updateStatus('warning', 'HC3 not configured. Please set your credentials in Settings.');
                 return;
@@ -672,11 +677,111 @@ You can also configure floor plans and manage devices once connected!`;
         });
     }
 
+    async copyBundledAssetsIfNeeded() {
+        try {
+            console.log('=== copyBundledAssetsIfNeeded STARTING ===');
+            const manifestVersion = '1.0.0';
+            const versionKey = 'bundled_assets_version';
+            
+            // Check if we've already copied this version
+            const copiedVersion = localStorage.getItem(versionKey);
+            console.log('Copied version from storage:', copiedVersion);
+            if (copiedVersion === manifestVersion) {
+                console.log('Bundled assets already copied for version', manifestVersion);
+                return;
+            }
+            
+            // Check if assets already exist (e.g., copied by Rust on iOS)
+            try {
+                const testPath = `${this.dataPath}/config.json`;
+                const testRead = await this.invoke('read_file_as_text', { filePath: testPath });
+                if (testRead) {
+                    console.log('Assets already exist (likely copied by Rust), skipping JS copy');
+                    localStorage.setItem(versionKey, manifestVersion);
+                    return;
+                }
+            } catch (err) {
+                // Assets don't exist, continue with copy
+                console.log('Assets not found, will copy from bundled resources');
+            }
+            
+            console.log('Copying bundled assets to data directory...');
+            console.log('Data path:', this.dataPath);
+            
+            // Fetch manifest from bundled assets using Rust command (embedded at compile time)
+            console.log('Reading asset-manifest.json from bundled assets...');
+            const manifestB64 = await this.invoke('read_bundled_asset', { 
+                assetPath: 'asset-manifest.json' 
+            });
+            const manifestJson = atob(manifestB64);
+            const manifest = JSON.parse(manifestJson);
+            console.log(`Found ${manifest.files.length} files to copy`);
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            // Copy each file from manifest
+            for (const file of manifest.files) {
+                try {
+                    // Read file from bundled assets using Rust command
+                    const fileB64 = await this.invoke('read_bundled_asset', { 
+                        assetPath: file 
+                    });
+                    
+                    // Write to data directory
+                    const targetPath = `${this.dataPath}/${file}`;
+                    await this.invoke('write_file_base64', { 
+                        filePath: targetPath,
+                        b64: fileB64 
+                    });
+                    
+                    successCount++;
+                    if (successCount % 5 === 0) {
+                        console.log(`Progress: ${successCount}/${manifest.files.length} files copied`);
+                    }
+                } catch (err) {
+                    console.error(`Error copying ${file}:`, err);
+                    errorCount++;
+                }
+            }
+            
+            console.log(`Asset copy complete: ${successCount} succeeded, ${errorCount} failed`);
+            
+            // Store version to avoid re-copying
+            if (successCount > 0) {
+                localStorage.setItem(versionKey, manifestVersion);
+            }
+            
+        } catch (error) {
+            console.error('Failed to copy bundled assets:', error);
+            // Don't block app startup on asset copy failure
+        }
+    }
+
     async loadHomeMapConfig() {
         try {
             console.log('Loading HomeMap config...');
             this.dataPath = await this.invoke('get_data_path');
             console.log('Data path:', this.dataPath);
+            
+            // Check if this is first run (no bundled assets copied yet)
+            const versionKey = 'bundled_assets_version';
+            const copiedVersion = localStorage.getItem(versionKey);
+            const isFirstRun = !copiedVersion;
+            
+            if (isFirstRun) {
+                // On first run, wait for asset copy to complete
+                console.log('First run detected, waiting for asset copy...');
+                await this.copyBundledAssetsIfNeeded();
+                console.log('Asset copy completed, continuing startup...');
+            } else {
+                // On subsequent runs, copy in background (updates)
+                this.copyBundledAssetsIfNeeded().then(() => {
+                    console.log('Background asset copy completed');
+                }).catch(err => {
+                    console.error('Background asset copy failed:', err);
+                });
+            }
             
             // Initialize widget manager now that we have dataPath
             this.widgetManager = new WidgetManager(this.dataPath, this.invoke);

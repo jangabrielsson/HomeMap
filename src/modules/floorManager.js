@@ -102,6 +102,9 @@ export class FloorManager {
         if (config.floors.length > 0) {
             this.homeMap.currentFloor = config.floors[0].id;
             
+            // Show the first floor explicitly
+            this.showFloor(config.floors[0].id);
+            
             // Restore zoom for first floor
             this.homeMap.restoreZoomForFloor(config.floors[0].id);
         }
