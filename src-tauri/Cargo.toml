@@ -27,6 +27,7 @@ dirs = "5"
 base64 = "0.22"  # Added for decoding asset files
 zip = "2.1"
 walkdir = "2"
+chrono = { version = "0.4", features = ["serde"] }
 
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 rfd = "0.15"

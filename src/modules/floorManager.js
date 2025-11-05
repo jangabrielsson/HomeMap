@@ -5,6 +5,34 @@ export class FloorManager {
         this.homeMap = homeMap;
         this.floorTabsEl = document.getElementById('floorTabs');
         this.floorContainerEl = document.getElementById('floorContainer');
+        
+        // Add single global resize handler to reposition all widgets
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                this.repositionAllDevices();
+            }, 100);
+        });
+    }
+    
+    /**
+     * Reposition all devices on all floors
+     */
+    repositionAllDevices() {
+        const config = this.homeMap.homemapConfig;
+        if (!config || !config.floors) return;
+        
+        config.floors.forEach(floor => {
+            const floorView = document.getElementById(`floor-${floor.id}`);
+            if (!floorView) return;
+            
+            const container = floorView.querySelector('.floor-image-container');
+            const img = container?.querySelector('.floor-image');
+            if (container && img && img.complete) {
+                this.repositionDevices(floor.id, container, img);
+            }
+        });
     }
 
     /**
@@ -42,22 +70,9 @@ export class FloorManager {
             const imageContainer = document.createElement('div');
             imageContainer.className = 'floor-image-container';
             imageContainer.style.position = 'relative';
-            imageContainer.style.display = 'inline-block';
             
-            // Add right-click handler for floor context menu
-            imageContainer.addEventListener('contextmenu', (e) => {
-                if (!this.homeMap.editMode) return; // Only in edit mode
-                
-                // Check if we clicked on empty space (not on a device)
-                if (e.target.closest('.device')) {
-                    return; // Device will handle its own context menu
-                }
-                
-                e.preventDefault();
-                
-                // Show floor context menu (Edit Floor, Delete Floor, Add Floor)
-                this.homeMap.contextMenuManager.showFloorContextMenu(e.clientX, e.clientY, floor);
-            });
+            // Setup context menu for floor (both right-click and long-press)
+            this.homeMap.contextMenuManager.setupFloorContextMenu(imageContainer, floor);
 
             // Create image
             const img = document.createElement('img');
@@ -75,6 +90,11 @@ export class FloorManager {
                     
                     // Once image loads, render devices on it
                     img.onload = () => {
+                        // Debug: Check computed styles
+                        const computedStyle = window.getComputedStyle(img);
+                        console.log(`Image CSS Debug - objectFit: ${computedStyle.objectFit}, width: ${computedStyle.width}, height: ${computedStyle.height}`);
+                        console.log(`Image natural: ${img.naturalWidth}x${img.naturalHeight}, rendered: ${img.width}x${img.height}, aspect: ${(img.width/img.height).toFixed(2)}, natural aspect: ${(img.naturalWidth/img.naturalHeight).toFixed(2)}`);
+                        
                         this.renderDevicesOnFloor(floor.id, imageContainer, img);
                     };
                 })
@@ -111,6 +131,70 @@ export class FloorManager {
     }
 
     /**
+     * Reposition devices on floor when window resizes
+     */
+    repositionDevices(floorId, container, img) {
+        const config = this.homeMap.homemapConfig;
+        const floor = config.floors.find(f => f.id === floorId);
+        if (!floor) return;
+
+        const imgRect = img.getBoundingClientRect();
+        
+        // Get current zoom level
+        const zoomLevel = this.homeMap.zoomLevel || 100;
+        const scale = zoomLevel / 100;
+        
+        // Calculate the actual rendered image size (accounting for object-fit: contain)
+        const containerAspect = imgRect.width / imgRect.height;
+        const imageAspect = img.naturalWidth / img.naturalHeight;
+        
+        let renderedWidth, renderedHeight, imageOffsetX, imageOffsetY;
+        
+        if (containerAspect > imageAspect) {
+            // Container is wider than image - image is constrained by height
+            renderedHeight = imgRect.height;
+            renderedWidth = renderedHeight * imageAspect;
+            imageOffsetX = (imgRect.width - renderedWidth) / 2;
+            imageOffsetY = 0;
+        } else {
+            // Container is taller than image - image is constrained by width
+            renderedWidth = imgRect.width;
+            renderedHeight = renderedWidth / imageAspect;
+            imageOffsetX = 0;
+            imageOffsetY = (imgRect.height - renderedHeight) / 2;
+        }
+
+        // Filter devices that are on this floor (same logic as renderDevicesOnFloor)
+        const devices = config.devices?.filter(d => this.homeMap.isDeviceOnFloor(d, floorId)) || [];
+
+        devices.forEach(device => {
+            const position = this.homeMap.getDevicePosition(device, floorId);
+            if (!position) return;
+
+            const deviceEl = document.getElementById(`device-${device.id}`);
+            if (!deviceEl) return;
+
+            // Calculate position as percentage of natural image dimensions
+            const xPercent = position.x / img.naturalWidth;
+            const yPercent = position.y / img.naturalHeight;
+
+            // Calculate pixel position within the actual rendered image
+            const xInImage = xPercent * renderedWidth;
+            const yInImage = yPercent * renderedHeight;
+            
+            // Widget position relative to container, accounting for scale
+            const xPixel = (imageOffsetX + xInImage) / scale;
+            const yPixel = (imageOffsetY + yInImage) / scale;
+            
+            // Set position
+            deviceEl.style.left = `${xPixel}px`;
+            deviceEl.style.top = `${yPixel}px`;
+            deviceEl.style.transform = 'translate(-50%, -50%)';
+            deviceEl.style.webkitTransform = 'translate(-50%, -50%)'; // iOS Safari compatibility
+        });
+    }
+
+    /**
      * Render devices on a specific floor
      */
     renderDevicesOnFloor(floorId, container, img) {
@@ -118,6 +202,8 @@ export class FloorManager {
         
         // Filter devices that are on this floor (supports both formats)
         const devices = config.devices?.filter(d => this.homeMap.isDeviceOnFloor(d, floorId)) || [];
+        
+        console.log(`renderDevicesOnFloor: floorId=${floorId}, total devices in config=${config.devices?.length || 0}, devices on this floor=${devices.length}`);
         
         devices.forEach(device => {
             // Get position for this specific floor
@@ -133,13 +219,65 @@ export class FloorManager {
             deviceEl.style.position = 'absolute';
             deviceEl.setAttribute('data-tooltip', `${device.name} (ID: ${device.id})`);
             
-            // Calculate position as percentage of image dimensions
-            const xPercent = (position.x / img.naturalWidth) * 100;
-            const yPercent = (position.y / img.naturalHeight) * 100;
+            // Get the actual rendered image bounds
+            const imgRect = img.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
             
-            deviceEl.style.left = `${xPercent}%`;
-            deviceEl.style.top = `${yPercent}%`;
+            // Get current zoom level
+            const zoomLevel = this.homeMap.zoomLevel || 100;
+            const scale = zoomLevel / 100;
+            
+            // Calculate the actual rendered image size (accounting for object-fit: contain)
+            const containerAspect = imgRect.width / imgRect.height;
+            const imageAspect = img.naturalWidth / img.naturalHeight;
+            
+            let renderedWidth, renderedHeight, imageOffsetX, imageOffsetY;
+            
+            if (containerAspect > imageAspect) {
+                // Container is wider than image - image is constrained by height
+                renderedHeight = imgRect.height;
+                renderedWidth = renderedHeight * imageAspect;
+                imageOffsetX = (imgRect.width - renderedWidth) / 2;
+                imageOffsetY = 0;
+            } else {
+                // Container is taller than image - image is constrained by width
+                renderedWidth = imgRect.width;
+                renderedHeight = renderedWidth / imageAspect;
+                imageOffsetX = 0;
+                imageOffsetY = (imgRect.height - renderedHeight) / 2;
+            }
+            
+            console.log(`[RENDER] Device ${device.id}: zoom=${zoomLevel}%, scale=${scale}`);
+            console.log(`  Container: ${imgRect.width.toFixed(1)}x${imgRect.height.toFixed(1)}, aspect=${containerAspect.toFixed(2)}`);
+            console.log(`  Natural: ${img.naturalWidth}x${img.naturalHeight}, aspect=${imageAspect.toFixed(2)}`);
+            console.log(`  Rendered image: ${renderedWidth.toFixed(1)}x${renderedHeight.toFixed(1)}`);
+            console.log(`  Image offset: (${imageOffsetX.toFixed(1)}, ${imageOffsetY.toFixed(1)})`);
+            console.log(`  Constraint: ${containerAspect > imageAspect ? 'by height (wider container)' : 'by width (taller container)'}`);
+            
+            // Calculate position as percentage of natural image dimensions
+            const xPercent = position.x / img.naturalWidth;
+            const yPercent = position.y / img.naturalHeight;
+            
+            // Calculate pixel position within the actual rendered image
+            const xInImage = xPercent * renderedWidth;
+            const yInImage = yPercent * renderedHeight;
+            
+            console.log(`  Natural pos=(${position.x}, ${position.y}), percent=(${(xPercent*100).toFixed(2)}%, ${(yPercent*100).toFixed(2)}%)`);
+            console.log(`  In rendered image=(${xInImage.toFixed(1)}, ${yInImage.toFixed(1)})`);
+            console.log(`  Image offset: (${imageOffsetX.toFixed(1)}, ${imageOffsetY.toFixed(1)})`);
+            
+            // Widget position relative to container
+            // Since widgets are children of container (not img), we need to add imageOffset
+            // to account for where the rendered image is within the container
+            const xPixel = (imageOffsetX + xInImage) / scale;
+            const yPixel = (imageOffsetY + yInImage) / scale;
+            
+            console.log(`  Final position=(${xPixel.toFixed(1)}, ${yPixel.toFixed(1)})`);
+            
+            deviceEl.style.left = `${xPixel}px`;
+            deviceEl.style.top = `${yPixel}px`;
             deviceEl.style.transform = 'translate(-50%, -50%)';
+            deviceEl.style.webkitTransform = 'translate(-50%, -50%)'; // iOS Safari compatibility
             
             // Create icon placeholder
             const icon = document.createElement('img');
@@ -210,18 +348,26 @@ export class FloorManager {
      */
     setupDeviceDrag(deviceEl, device, container, img) {
         let isDragging = false;
-        let startX, startY;
+        let offsetX = 0, offsetY = 0;
+        let isFirstMove = false;
         
         deviceEl.addEventListener('mousedown', (e) => {
             if (!this.homeMap.editMode) return;
             
             isDragging = true;
+            isFirstMove = true;
             deviceEl.classList.add('dragging');
             
-            // Get current position
-            const rect = container.getBoundingClientRect();
-            startX = e.clientX;
-            startY = e.clientY;
+            // Get current rendered position
+            const rect = deviceEl.getBoundingClientRect();
+            
+            // Widget center in viewport coordinates
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            // Calculate offset from cursor to widget center
+            offsetX = e.clientX - centerX;
+            offsetY = e.clientY - centerY;
             
             e.preventDefault();
         });
@@ -229,20 +375,48 @@ export class FloorManager {
         document.addEventListener('mousemove', (e) => {
             if (!isDragging || !this.homeMap.editMode) return;
             
-            const rect = container.getBoundingClientRect();
+            // Get current zoom level
+            const zoomLevel = this.homeMap.zoomLevel || 100;
+            const scale = zoomLevel / 100;
+            
             const imgRect = img.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
             
-            // Calculate position relative to image
-            const x = e.clientX - imgRect.left;
-            const y = e.clientY - imgRect.top;
+            // On first move, recalculate offset based on current rendered position
+            // This handles cases where the layout changed (console opened/closed) since entering edit mode
+            if (isFirstMove) {
+                isFirstMove = false;
+                const rect = deviceEl.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                // Recalculate offset from current cursor to current rendered center
+                offsetX = e.clientX - centerX;
+                offsetY = e.clientY - centerY;
+            }
             
-            // Convert to percentage
-            const xPercent = (x / imgRect.width) * 100;
-            const yPercent = (y / imgRect.height) * 100;
+            // Calculate widget center position in viewport coordinates
+            let centerX = e.clientX - offsetX;
+            let centerY = e.clientY - offsetY;
             
-            // Update position
-            deviceEl.style.left = `${xPercent}%`;
-            deviceEl.style.top = `${yPercent}%`;
+            // Clamp to image bounds (in viewport coordinates, which are scaled)
+            centerX = Math.max(imgRect.left, Math.min(centerX, imgRect.left + imgRect.width));
+            centerY = Math.max(imgRect.top, Math.min(centerY, imgRect.top + imgRect.height));
+            
+            // Convert from viewport coordinates to container-relative coordinates
+            // Then divide by scale to get the unscaled position
+            let x = (centerX - containerRect.left) / scale;
+            let y = (centerY - containerRect.top) / scale;
+            
+            // Apply grid snapping if shift key is held
+            if (e.shiftKey) {
+                x = Math.round(x / 5) * 5;
+                y = Math.round(y / 5) * 5;
+            }
+            
+            // Update position - the widget's center will be at this position due to transform
+            deviceEl.style.left = `${x}px`;
+            deviceEl.style.top = `${y}px`;
         });
         
         document.addEventListener('mouseup', async (e) => {
@@ -252,22 +426,52 @@ export class FloorManager {
             deviceEl.classList.remove('dragging');
             
             if (this.homeMap.editMode) {
-                // Calculate new position in image coordinates
-                const rect = container.getBoundingClientRect();
+                // Get current zoom level
+                const zoomLevel = this.homeMap.zoomLevel || 100;
+                const scale = zoomLevel / 100;
+                
+                // Calculate the actual rendered image size (same as in renderDevicesOnFloor)
                 const imgRect = img.getBoundingClientRect();
+                const containerAspect = imgRect.width / imgRect.height;
+                const imageAspect = img.naturalWidth / img.naturalHeight;
                 
-                const x = e.clientX - imgRect.left;
-                const y = e.clientY - imgRect.top;
+                let renderedWidth, renderedHeight, imageOffsetX, imageOffsetY;
                 
-                // Convert from display size to natural image size
-                const naturalX = (x / imgRect.width) * img.naturalWidth;
-                const naturalY = (y / imgRect.height) * img.naturalHeight;
+                if (containerAspect > imageAspect) {
+                    // Container is wider - image constrained by height
+                    renderedHeight = imgRect.height;
+                    renderedWidth = renderedHeight * imageAspect;
+                    imageOffsetX = (imgRect.width - renderedWidth) / 2;
+                    imageOffsetY = 0;
+                } else {
+                    // Container is taller - image constrained by width
+                    renderedWidth = imgRect.width;
+                    renderedHeight = renderedWidth / imageAspect;
+                    imageOffsetX = 0;
+                    imageOffsetY = (imgRect.height - renderedHeight) / 2;
+                }
+                
+                // Cursor position relative to img element (in scaled coordinates)
+                let x = e.clientX - imgRect.left;
+                let y = e.clientY - imgRect.top;
+                
+                // Subtract the image offset to get position within the actual rendered image
+                x = x - imageOffsetX;
+                y = y - imageOffsetY;
+                
+                // Clamp to rendered image bounds (scaled)
+                x = Math.max(0, Math.min(x, renderedWidth));
+                y = Math.max(0, Math.min(y, renderedHeight));
+                
+                // Convert from rendered image pixels to natural image pixels
+                const naturalX = (x / renderedWidth) * img.naturalWidth;
+                const naturalY = (y / renderedHeight) * img.naturalHeight;
                 
                 // Update device position on current floor
                 const newPosition = { x: Math.round(naturalX), y: Math.round(naturalY) };
                 this.homeMap.updateDevicePosition(device, this.homeMap.currentFloor, newPosition);
                 
-                console.log(`Device ${device.id} moved to (${newPosition.x}, ${newPosition.y}) on floor ${this.homeMap.currentFloor}`);
+                console.log(`Device ${device.id} SAVED: cursor=(${e.clientX}, ${e.clientY}), renderedImage=${renderedWidth.toFixed(1)}x${renderedHeight.toFixed(1)}, imageOffset=(${imageOffsetX.toFixed(1)}, ${imageOffsetY.toFixed(1)}), inImage=(${x.toFixed(1)}, ${y.toFixed(1)}), natural=(${newPosition.x}, ${newPosition.y})`);
                 
                 // Save config
                 await this.homeMap.hc3ApiManager.saveConfig();

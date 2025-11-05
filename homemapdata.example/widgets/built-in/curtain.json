@@ -1,0 +1,81 @@
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "curtain",
+    
+    "state": {
+        "value": 0
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == 0", "icon": "closed" },
+                { "when": "value < 99", "icon": "half" },
+                { "when": "value >= 99", "icon": "open" }
+            ]
+        },
+        "subtext": {
+            "template": "${value}%",
+            "visible": "value > 0"
+        }
+    },
+    
+    "actions": {
+        "close": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/close",
+            "body": { "args": [] }
+        },
+        "open": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/open",
+            "body": { "args": [] }
+        },
+        "setValue": {
+            "method": "POST",
+            "api": "/api/devices/${id}/action/setValue",
+            "body": { "args": ["${value}"] }
+        }
+    },
+    
+    "ui": {
+        "rows": [
+            {
+                "elements": [
+                    { "type": "button", "label": "Open", "action": "open" },
+                    { "type": "button", "label": "Close", "action": "close" }
+                ]
+            },
+            {
+                "elements": [
+                    { "type": "label", "text": "Opening" },
+                    { 
+                        "type": "slider", 
+                        "min": 0, 
+                        "max": 99, 
+                        "property": "value", 
+                        "action": "setValue" 
+                    }
+                ]
+            }
+        ]
+    }
+}

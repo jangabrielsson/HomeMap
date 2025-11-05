@@ -1,0 +1,35 @@
+{
+    "widgetVersion": "0.1.5",
+    "iconSet": "smokeSensor",
+    
+    "state": {
+        "value": false
+    },
+    
+    "getters": {
+        "value": {
+            "api": "/api/devices/${id}/properties/value",
+            "path": "value"
+        }
+    },
+    
+    "events": {
+        "DevicePropertyUpdatedEvent": {
+            "match": "$..[?(@.id == ${id} && @.property == 'value')]",
+            "updates": {
+                "value": "event.newValue"
+            }
+        }
+    },
+    
+    "render": {
+        "icon": {
+            "type": "conditional",
+            "property": "value",
+            "conditions": [
+                { "when": "value == false", "icon": "off" },
+                { "when": "value == true", "icon": "on" }
+            ]
+        }
+    }
+}

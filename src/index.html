@@ -3,8 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>HomeMap</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=DEBUG_20250105">
     <script>
         // Suppress Tauri hot-reload errors in dev mode
         window.addEventListener('unhandledrejection', (event) => {
@@ -122,6 +125,11 @@
                     <small>Create a backup archive of your entire HomeMap data folder</small>
                 </div>
                 
+                <div class="form-group">
+                    <button id="restoreHomemapBtn" class="secondary-button">📂 Restore HomeMap Data...</button>
+                    <small>Restore HomeMap data from a backup archive</small>
+                </div>
+                
                 <h3>Widget Display</h3>
                 <div class="form-group">
                     <label>
@@ -163,6 +171,74 @@
         </div>
     </div>
 
+    <!-- Restore HomeMap Data Dialog -->
+    <div id="restoreDialog" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Restore HomeMap Data</h2>
+            
+            <div class="form-group">
+                <label>Select backup file (.zip):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="restoreFilePath" readonly placeholder="Choose backup file...">
+                    <!-- Hidden file input -->
+                    <input type="file" id="mobileRestoreFileInput" accept=".zip" style="display: none;">
+                    <!-- Browse button -->
+                    <button id="browseRestoreFile" class="secondary-button">Browse...</button>
+                </div>
+                <button id="showAvailableBackups" class="secondary-button" style="margin-top: 10px; display: none;">📋 Show Available Backups</button>
+            </div>
+            
+            <div id="availableBackupsList" class="backup-files-list" style="display: none;">
+                <h4>Available Backup Files:</h4>
+                <div id="backupFilesContainer">
+                    <!-- Backup files will be listed here -->
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <h3>Restore Options</h3>
+                <label>
+                    <input type="checkbox" id="backupBeforeRestore" checked>
+                    Create backup of current data before restoring
+                </label>
+                
+                <h4>What to restore:</h4>
+                <label>
+                    <input type="checkbox" id="restoreConfig" checked>
+                    Configuration (config.json, floor layouts, device positions)
+                </label>
+                <label>
+                    <input type="checkbox" id="restoreImages" checked>
+                    Floor plan images
+                </label>
+                <label>
+                    <input type="checkbox" id="restoreIcons" checked>
+                    Custom icon sets
+                </label>
+                <label>
+                    <input type="checkbox" id="restoreWidgets" checked>
+                    Custom widgets
+                </label>
+                <label>
+                    <input type="checkbox" id="restoreUiPreferences" checked>
+                    UI preferences (widget backgrounds, themes, display settings)
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <div class="warning-box" style="display: none;" id="restoreWarning">
+                    ⚠️ <strong>Warning:</strong> This will replace your current HomeMap data. 
+                    Make sure you have a backup if needed.
+                </div>
+            </div>
+            
+            <div class="settings-actions">
+                <button id="doRestore" class="primary-button" disabled>Restore Data</button>
+                <button id="cancelRestore" class="secondary-button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Context Menu -->
     <div id="contextMenu" class="context-menu" style="display: none;">
         <div class="context-menu-item" id="contextMenuEdit">Edit Device</div>
@@ -176,6 +252,8 @@
 
     <!-- Floor Context Menu -->
     <div id="floorContextMenu" class="context-menu" style="display: none;">
+        <div class="context-menu-item" id="floorContextMenuAddDevice">Add Device</div>
+        <div class="context-menu-divider"></div>
         <div class="context-menu-item" id="floorContextMenuEdit">Edit Floor</div>
         <div class="context-menu-item" id="floorContextMenuAdd">Add Floor</div>
         <div class="context-menu-item context-menu-delete" id="floorContextMenuDelete">Delete Floor</div>

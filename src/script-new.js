@@ -784,6 +784,14 @@ class HomeMap {
         doRestoreBtn.onclick = null;
         cancelBtn.onclick = null;
         
+        // VISUAL DEBUG: Change button text to confirm new code
+        doRestoreBtn.textContent = '🔴 RESTORE DATA (NEW CODE)';
+        doRestoreBtn.style.backgroundColor = 'red';
+        doRestoreBtn.style.zIndex = '999999'; // Ensure button is on top
+        doRestoreBtn.style.position = 'relative'; // Needed for z-index
+        console.log('Reset button handlers and updated visual styling');
+        console.log('Button disabled status:', doRestoreBtn.disabled);
+        
         // Restore button - set handler with proper event handling
         doRestoreBtn.onclick = async (e) => {
             // CRITICAL: Stop event propagation immediately
@@ -793,58 +801,35 @@ class HomeMap {
                 e.stopImmediatePropagation();
             }
             
-            console.log('=== Restore button clicked ===');
+            const clickTime = Date.now();
+            console.log(`=== doRestoreBtn onclick fired AT ${clickTime} ===`);
+            console.log('this.isRestoring =', this.isRestoring);
             
             if (this.isRestoring) {
-                console.log('Restore already in progress, ignoring click');
+                console.log(`!!!!! Restore already in progress AT ${Date.now()}, BLOCKING click !!!!!`);
                 return;
             }
             
-            // Get the file path and backup option to show in confirmation
-            const filePath = document.getElementById('restoreFilePath').value;
-            const backupExisting = document.getElementById('backupBeforeRestore').checked;
+            // Disable the button immediately
+            doRestoreBtn.disabled = true;
+            doRestoreBtn.style.opacity = '0.5';
+            console.log(`Disabled doRestoreBtn AT ${Date.now()}`);
             
-            if (!filePath) {
-                alert('Please select a backup file first.');
-                return;
-            }
-            
-            // Show confirmation dialog
-            const confirmMsg = backupExisting 
-                ? 'This will restore your HomeMap data from the backup.\n\nYour current data will be backed up first.'
-                : 'This will restore your HomeMap data from the backup.\n\n⚠️ WARNING: Your current data will be OVERWRITTEN!';
+            this.isRestoring = true;
+            console.log(`Set isRestoring = true AT ${Date.now()}`);
             
             try {
-                const confirmed = await window.__TAURI__.dialog.ask(confirmMsg, {
-                    title: 'Confirm Restore',
-                    type: 'warning',
-                    okLabel: 'Restore',
-                    cancelLabel: 'Cancel'
-                });
-                
-                if (!confirmed) {
-                    console.log('User cancelled restore');
-                    return; // User clicked Cancel - stop here
-                }
-                
-                // User clicked OK - NOW perform the restore
-                console.log('User confirmed, starting restore...');
-                
-                // Disable button and set flag
-                doRestoreBtn.disabled = true;
-                doRestoreBtn.style.opacity = '0.5';
-                this.isRestoring = true;
-                
-                // Call the restore function
+                console.log(`=== About to call restoreHomeMapData AT ${Date.now()} (clicked at ${clickTime}) ===`);
                 await this.restoreHomeMapData();
-                
-            } catch (err) {
-                console.error('Dialog or restore error:', err);
-                // Re-enable button on error
+                console.log(`=== restoreHomeMapData completed AT ${Date.now()} ===`);
+                // Dialog is closed inside restoreHomeMapData before showing alerts
+                // Note: isRestoring flag is reset inside restoreHomeMapData on cancel or after reload prompt
+            } catch (error) {
+                console.error(`Error in doRestoreBtn handler AT ${Date.now()}:`, error);
+                // Re-enable button and reset state on error
                 doRestoreBtn.disabled = false;
                 doRestoreBtn.style.opacity = '1';
                 this.isRestoring = false;
-                alert('Error during restore: ' + err);
             }
         };
         console.log('Set doRestoreBtn.onclick handler');
@@ -960,10 +945,13 @@ class HomeMap {
     }
     
     async restoreHomeMapData() {
-        console.log('=== restoreHomeMapData called ===');
+        const callTime = Date.now();
+        console.error('🚨🚨🚨🚨🚨 restoreHomeMapData ENTRY POINT 🚨🚨🚨🚨🚨');
+        console.log(`=== restoreHomeMapData called AT ${callTime} ===`);
+        console.log('Stack trace:', new Error().stack);
         
         let dialogClosed = false;
-        let userConfirmedRestore = false;
+        let userConfirmedRestore = false; // Guard flag
         
         try {
             const filePath = document.getElementById('restoreFilePath').value;
@@ -986,11 +974,20 @@ class HomeMap {
                 return;
             }
             
-            // Confirmation already done in button handler, proceed with restore
-            console.log('Proceeding with restore...');
+            // STEP 1: Show confirmation - DON'T use confirm() as it's broken in async context!
+            // Instead, just proceed directly since user already clicked "Restore Data" button
+            const confirmMsg = backupExisting 
+                ? 'Backup will be created before restore.'
+                : 'Current data will be overwritten.';
+            
+            console.error('🚨🚨🚨🚨🚨 PROCEEDING WITH RESTORE 🚨🚨🚨🚨🚨');
+            console.error('Message:', confirmMsg);
+            
+            // NO confirm() dialog - user already confirmed by clicking the button
             userConfirmedRestore = true;
             
-            // Call backend to restore data
+            // STEP 5: Now call backend to restore data
+            console.error('🔥🔥🔥🔥🔥 STEP 5: CALLING BACKEND RESTORE 🔥🔥🔥🔥🔥');
             console.log('Restoring from:', filePath, 'to:', this.dataPath);
             
             const result = await this.invoke('restore_homemap_data', {
@@ -1006,31 +1003,27 @@ class HomeMap {
                 }
             });
             
-            console.log('Backend restore completed successfully');
+            console.error('🔥🔥🔥🔥🔥 STEP 6: BACKEND RESTORE COMPLETED 🔥🔥🔥🔥🔥');
+            console.log(`Backend restore completed AT ${Date.now()}`);
             
-            // Close the restore dialog first
+            // STEP 7: Close dialog and clean up BEFORE showing success messages
             const dialog = document.getElementById('restoreDialog');
             if (dialog) {
                 dialog.style.display = 'none';
                 dialogClosed = true;
             }
             this.dialogOpen = false;
+            console.log('Dialog closed, dialogOpen = false');
             
-            // Show success message using Tauri dialog (more reliable than alert)
-            try {
-                await window.__TAURI__.dialog.message(
-                    '✅ HomeMap data restored successfully!\n\nThe app will now reload to apply the changes.',
-                    { title: 'Restore Complete', type: 'info' }
-                );
-            } catch (err) {
-                console.error('Dialog error, using alert:', err);
-                alert('✅ HomeMap data restored successfully!\n\nThe app will now reload to apply the changes.');
-            }
+            // NO MORE confirm() dialogs - just auto-reload after successful restore
+            console.error('🔥🔥🔥🔥🔥 RESTORE COMPLETE - AUTO RELOADING 🔥🔥🔥🔥🔥');
             
-            // Reload the app
+            // Small delay then reload
+            await new Promise(resolve => setTimeout(resolve, 500));
             window.location.replace(window.location.href);
             
         } catch (error) {
+            console.error('❌❌❌ ERROR IN RESTORE PROCESS ❌❌❌');
             console.error('Failed to restore backup:', error);
             
             // Ensure dialog is closed and ALL state is reset on error

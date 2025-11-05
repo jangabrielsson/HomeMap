@@ -81,6 +81,18 @@ struct HC3Config {
 }
 
 #[tauri::command]
+fn is_mobile_platform() -> bool {
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        true
+    }
+    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    {
+        false
+    }
+}
+
+#[tauri::command]
 fn get_hc3_config() -> Result<HC3Config, String> {
     // First priority: Try to load from settings.json
     if let Ok(Some(settings)) = load_app_settings() {
@@ -445,12 +457,6 @@ fn extract_bundled_template(_app: &tauri::AppHandle, dest_dir: &PathBuf) -> Resu
     Err("Could not extract bundled template".to_string())
 }
 
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn extract_bundled_template(_app: &tauri::AppHandle, _dest_dir: &PathBuf) -> Result<(), String> {
-    // Not needed on desktop
-    Err("Not applicable on desktop platforms".to_string())
-}
-
 fn find_template_directory() -> Result<PathBuf, String> {
     println!("Searching for homemapdata.example template...");
     
@@ -677,10 +683,13 @@ fn read_widget_json(widget_type: String) -> Result<String, String> {
 fn list_directory(path: String) -> Result<Vec<String>, String> {
     let path_buf = PathBuf::from(&path);
     
-    // Security check: ensure path is within homemap data directory
-    let homemap_path = get_homemap_data_path()?;
-    if !path_buf.starts_with(&homemap_path) {
-        return Err("Access denied: path must be within homemap data directory".to_string());
+    // Security check: on mobile platforms, ensure path is within homemap data directory
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        let homemap_path = get_homemap_data_path()?;
+        if !path_buf.starts_with(&homemap_path) {
+            return Err("Access denied: path must be within homemap data directory".to_string());
+        }
     }
     
     let entries = fs::read_dir(&path_buf)
@@ -707,14 +716,19 @@ fn list_directory(path: String) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 fn save_config(file_path: String, content: String) -> Result<(), String> {
-    // Validate path is within homemap data directory
-    let homemap_path = get_homemap_data_path()?;
-    let target_path = PathBuf::from(&file_path);
-    
-    // Ensure the path is within homemap data directory
-    if !target_path.starts_with(&homemap_path) {
-        return Err("Access denied: path must be within homemap data directory".to_string());
+    // Validate path is within homemap data directory (mobile platforms only)
+    #[cfg(any(target_os = "ios", target_os = "android"))]
+    {
+        let homemap_path = get_homemap_data_path()?;
+        let target_path = PathBuf::from(&file_path);
+        
+        // Ensure the path is within homemap data directory
+        if !target_path.starts_with(&homemap_path) {
+            return Err("Access denied: path must be within homemap data directory".to_string());
+        }
     }
+    
+    let target_path = PathBuf::from(&file_path);
     
     // Create parent directories if needed
     if let Some(parent) = target_path.parent() {
@@ -867,6 +881,15 @@ struct AppSettings {
     hc3_password: String,
     hc3_protocol: String,
     homemap_path: String,
+}
+
+// UI preferences that should be backed up and restored
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct UiPreferences {
+    widget_background_enabled: Option<bool>,
+    widget_background_color: Option<String>,
+    widget_background_opacity: Option<i32>,
+    // Add other UI preferences here as needed
 }
 
 #[tauri::command]
@@ -1033,6 +1056,34 @@ fn write_file_base64(file_path: String, b64: String) -> Result<(), String> {
         }
         Err(e) => Err(format!("Base64 decode error: {}", e)),
     }
+}
+
+// Save temporary file from byte array (for mobile file uploads)
+#[tauri::command]
+fn save_temp_file(file_name: String, data: Vec<u8>) -> Result<String, String> {
+    // Get the app data directory
+    let data_dir = get_homemap_data_path()?;
+    
+    // Create temp directory if it doesn't exist
+    let temp_dir = data_dir.join("temp");
+    if !temp_dir.exists() {
+        fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+    }
+    
+    // Generate temp file path
+    let temp_file = temp_dir.join(&file_name);
+    
+    // Write the file
+    fs::write(&temp_file, data)
+        .map_err(|e| format!("Failed to write temp file: {}", e))?;
+    
+    println!("Saved temp file: {:?}", temp_file);
+    
+    // Return the absolute path as string
+    temp_file.to_str()
+        .ok_or_else(|| "Failed to convert path to string".to_string())
+        .map(|s| s.to_string())
 }
 
 // Read bundled asset file and return as base64
@@ -1321,6 +1372,421 @@ fn create_backup(source_path: String, dest_path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct RestoreOptions {
+    backup_existing: bool,
+    restore_config: bool,
+    restore_images: bool,
+    restore_icons: bool,
+    restore_widgets: bool,
+    restore_ui_preferences: bool,
+}
+
+#[tauri::command]
+fn restore_homemap_data(backup_path: String, target_path: String, options: RestoreOptions) -> Result<String, String> {
+    use std::fs::File;
+    use std::io::Read;
+    use zip::read::ZipArchive;
+    
+    let backup_file_path = PathBuf::from(&backup_path);
+    let target_dir = PathBuf::from(&target_path);
+    
+    // Validate backup file exists
+    if !backup_file_path.exists() {
+        return Err("Backup file does not exist".to_string());
+    }
+    
+    // Open and validate ZIP file
+    let file = File::open(&backup_file_path)
+        .map_err(|e| format!("Failed to open backup file: {}", e))?;
+    
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| format!("Failed to read backup archive: {}", e))?;
+    
+    // Validate backup file structure and contents
+    let mut has_config = false;
+    let mut file_count = 0;
+    let mut config_size = 0;
+    
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+        
+        file_count += 1;
+        let file_name = file.name();
+        
+        if file_name == "config.json" {
+            has_config = true;
+            config_size = file.size();
+            
+            // Basic config.json validation - should be valid JSON and reasonable size
+            if config_size < 10 {
+                return Err("Invalid backup file: config.json is too small".to_string());
+            }
+            if config_size > 10_000_000 { // 10MB limit
+                return Err("Invalid backup file: config.json is too large".to_string());
+            }
+        }
+        
+        // Check for suspicious files that shouldn't be in a HomeMap backup
+        if file_name.contains("..") || file_name.starts_with("/") {
+            return Err(format!("Invalid backup file: suspicious file path '{}'", file_name));
+        }
+    }
+    
+    if !has_config {
+        return Err("Invalid backup file: missing config.json. This doesn't appear to be a HomeMap backup.".to_string());
+    }
+    
+    if file_count == 0 {
+        return Err("Invalid backup file: archive is empty".to_string());
+    }
+    
+    println!("Backup validation passed: {} files, config.json size: {} bytes", file_count, config_size);
+    
+    // Validate config.json structure and version compatibility
+    let mut archive_for_validation = ZipArchive::new(File::open(&backup_file_path)
+        .map_err(|e| format!("Failed to reopen backup file: {}", e))?)
+        .map_err(|e| format!("Failed to read backup archive for validation: {}", e))?;
+    
+    for i in 0..archive_for_validation.len() {
+        let mut file = archive_for_validation.by_index(i)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+        
+        if file.name() == "config.json" {
+            let mut config_content = String::new();
+            file.read_to_string(&mut config_content)
+                .map_err(|e| format!("Failed to read config.json: {}", e))?;
+            
+            // Parse JSON to validate structure
+            let config_json: serde_json::Value = serde_json::from_str(&config_content)
+                .map_err(|e| format!("Invalid config.json format: {}", e))?;
+            
+            // Check if it looks like a HomeMap config
+            if !config_json.is_object() {
+                return Err("Invalid config.json: not a JSON object".to_string());
+            }
+            
+            let config_obj = config_json.as_object().unwrap();
+            
+            // Check for required fields (devices array is most important)
+            if !config_obj.contains_key("devices") {
+                return Err("Invalid config.json: missing 'devices' field. This may not be a HomeMap backup.".to_string());
+            }
+            
+            // Warn about version compatibility if version info is available
+            if let Some(version) = config_obj.get("version").and_then(|v| v.as_str()) {
+                println!("Backup created with HomeMap version: {}", version);
+                // Note: We don't fail here, just log for now
+                // Future versions could add compatibility checks
+            }
+            
+            // Check if devices is an array
+            if !config_obj["devices"].is_array() {
+                return Err("Invalid config.json: 'devices' field is not an array".to_string());
+            }
+            
+            println!("Config.json validation passed");
+            
+            // Extract UI preferences from the backup if requested
+            let ui_preferences = if options.restore_ui_preferences {
+                match extract_ui_preferences_from_config(&config_content) {
+                    Ok(prefs) => {
+                        println!("Extracted UI preferences from backup");
+                        Some(prefs)
+                    }
+                    Err(e) => {
+                        println!("Warning: Could not extract UI preferences: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            
+            // Store UI preferences for later application (after restore)
+            if let Some(prefs) = ui_preferences {
+                // We'll apply these after the restore completes
+                // Store them in a temporary location for now
+                let temp_prefs_path = std::env::temp_dir().join("homemap_ui_prefs.json");
+                let prefs_json = serde_json::to_string(&prefs)
+                    .map_err(|e| format!("Failed to serialize UI preferences: {}", e))?;
+                fs::write(&temp_prefs_path, prefs_json)
+                    .map_err(|e| format!("Failed to save temporary UI preferences: {}", e))?;
+            }
+            
+            break;
+        }
+    }
+    
+    // Create backup of existing data if requested
+    let backup_location = if options.backup_existing && target_dir.exists() {
+        let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+        let backup_name = format!("homemap-backup-before-restore-{}.zip", timestamp);
+        let backup_path = target_dir.parent()
+            .unwrap_or(&target_dir)
+            .join(&backup_name);
+        
+        create_backup(target_path.clone(), backup_path.to_string_lossy().to_string())?;
+        Some(backup_path.to_string_lossy().to_string())
+    } else {
+        None
+    };
+    
+    // Create target directory if it doesn't exist
+    fs::create_dir_all(&target_dir)
+        .map_err(|e| format!("Failed to create target directory: {}", e))?;
+    
+    // Extract files based on options
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)
+            .map_err(|e| format!("Failed to read archive entry: {}", e))?;
+        
+        let file_path = file.name().to_string();
+        let is_dir = file.is_dir();
+        
+        // Check if we should restore this file type
+        let should_restore = match file_path.as_str() {
+            p if p == "config.json" => options.restore_config,
+            p if p.starts_with("images/") => options.restore_images,
+            p if p.starts_with("icons/") => options.restore_icons,
+            p if p.starts_with("widgets/") => options.restore_widgets,
+            p if p.ends_with("installed-packages.json") || p.ends_with("widget-mappings.json") => true, // Always restore these
+            _ => true, // Restore other files by default
+        };
+        
+        if !should_restore {
+            continue;
+        }
+        
+        let outpath = target_dir.join(&file_path);
+        
+        if is_dir {
+            fs::create_dir_all(&outpath)
+                .map_err(|e| format!("Failed to create directory {}: {}", file_path, e))?;
+        } else {
+            if let Some(parent) = outpath.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|e| format!("Failed to create parent directory: {}", e))?;
+            }
+            
+            let mut outfile = File::create(&outpath)
+                .map_err(|e| format!("Failed to create file {}: {}", file_path, e))?;
+            
+            std::io::copy(&mut file, &mut outfile)
+                .map_err(|e| format!("Failed to extract file {}: {}", file_path, e))?;
+            
+            println!("Restored file: {}", file_path);
+        }
+    }
+    
+    // Apply UI preferences if they were extracted
+    let temp_prefs_path = std::env::temp_dir().join("homemap_ui_prefs.json");
+    if temp_prefs_path.exists() {
+        match fs::read_to_string(&temp_prefs_path) {
+            Ok(prefs_json) => {
+                match serde_json::from_str::<UiPreferences>(&prefs_json) {
+                    Ok(prefs) => {
+                        if let Err(e) = apply_ui_preferences_to_current_config(prefs) {
+                            println!("Warning: Could not apply UI preferences: {}", e);
+                        } else {
+                            println!("Successfully applied UI preferences from backup");
+                        }
+                    }
+                    Err(e) => println!("Warning: Could not parse stored UI preferences: {}", e),
+                }
+            }
+            Err(e) => println!("Warning: Could not read stored UI preferences: {}", e),
+        }
+        
+        // Clean up temporary file
+        let _ = fs::remove_file(&temp_prefs_path);
+    }
+    
+    let mut result = "HomeMap data restored successfully!".to_string();
+    if let Some(backup_loc) = backup_location {
+        result = format!("{}\n\nYour previous data was backed up to: {}", result, backup_loc);
+    }
+    
+    Ok(result)
+}
+
+// Extract UI preferences from config.json content
+fn extract_ui_preferences_from_config(config_content: &str) -> Result<UiPreferences, String> {
+    let config_json: serde_json::Value = serde_json::from_str(config_content)
+        .map_err(|e| format!("Failed to parse config.json: {}", e))?;
+    
+    let mut preferences = UiPreferences {
+        widget_background_enabled: None,
+        widget_background_color: None,
+        widget_background_opacity: None,
+    };
+    
+    // Extract widget background settings if they exist
+    if let Some(widget_bg) = config_json.get("widgetBackground").and_then(|v| v.as_object()) {
+        preferences.widget_background_enabled = widget_bg.get("enabled").and_then(|v| v.as_bool());
+        preferences.widget_background_color = widget_bg.get("color").and_then(|v| v.as_str()).map(|s| s.to_string());
+        preferences.widget_background_opacity = widget_bg.get("opacity").and_then(|v| v.as_i64()).map(|i| i as i32);
+    }
+    
+    Ok(preferences)
+}
+
+// Apply UI preferences to the current config.json
+#[tauri::command]
+fn apply_ui_preferences_to_current_config(preferences: UiPreferences) -> Result<(), String> {
+    let data_path = get_homemap_data_path()?;
+    let config_path = data_path.join("config.json");
+    
+    if !config_path.exists() {
+        return Err("Config file not found".to_string());
+    }
+    
+    // Read current config
+    let config_content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config file: {}", e))?;
+    
+    let mut config_json: serde_json::Value = serde_json::from_str(&config_content)
+        .map_err(|e| format!("Failed to parse current config: {}", e))?;
+    
+    // Apply UI preferences
+    if let Some(config_obj) = config_json.as_object_mut() {
+        let mut widget_bg = serde_json::Map::new();
+        
+        if let Some(enabled) = preferences.widget_background_enabled {
+            widget_bg.insert("enabled".to_string(), serde_json::Value::Bool(enabled));
+        }
+        if let Some(color) = preferences.widget_background_color {
+            widget_bg.insert("color".to_string(), serde_json::Value::String(color));
+        }
+        if let Some(opacity) = preferences.widget_background_opacity {
+            widget_bg.insert("opacity".to_string(), serde_json::Value::Number(opacity.into()));
+        }
+        
+        if !widget_bg.is_empty() {
+            config_obj.insert("widgetBackground".to_string(), serde_json::Value::Object(widget_bg));
+        }
+    }
+    
+    // Save updated config
+    let updated_content = serde_json::to_string_pretty(&config_json)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
+    
+    fs::write(&config_path, updated_content)
+        .map_err(|e| format!("Failed to write config file: {}", e))?;
+    
+    println!("Applied UI preferences to current config");
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BackupFileInfo {
+    path: String,
+    filename: String,
+    size: u64,
+    modified: String,
+}
+
+#[tauri::command]
+fn list_backup_files() -> Result<Vec<BackupFileInfo>, String> {
+    let mut backup_files = Vec::new();
+    
+    // Check common directories where backup files might be located
+    let search_dirs = vec![
+        #[cfg(target_os = "android")]
+        PathBuf::from("/storage/emulated/0/Download"), // Android Downloads
+        #[cfg(target_os = "android")]
+        PathBuf::from("/storage/emulated/0/Documents"), // Android Documents
+        
+        #[cfg(target_os = "ios")]
+        dirs::document_dir().unwrap_or_default().join("Downloads"), // iOS Downloads (if accessible)
+        #[cfg(target_os = "ios")]
+        dirs::document_dir().unwrap_or_default(), // iOS Documents
+        
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        dirs::download_dir().unwrap_or_default(), // Desktop Downloads
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        dirs::document_dir().unwrap_or_default(), // Desktop Documents
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        dirs::desktop_dir().unwrap_or_default(), // Desktop
+    ];
+    
+    for search_dir in search_dirs {
+        if !search_dir.exists() {
+            continue;
+        }
+        
+        if let Ok(entries) = fs::read_dir(&search_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if let Some(extension) = path.extension() {
+                        if extension == "zip" {
+                            if let Some(filename) = path.file_name() {
+                                if let Some(filename_str) = filename.to_str() {
+                                    // Only include files that look like HomeMap backups
+                                    if filename_str.contains("homemap") || filename_str.contains("HomeMap") {
+                                        if let Ok(metadata) = fs::metadata(&path) {
+                                            let modified = metadata.modified()
+                                                .map(|time| {
+                                                    let datetime: chrono::DateTime<chrono::Utc> = time.into();
+                                                    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+                                                })
+                                                .unwrap_or_else(|_| "Unknown".to_string());
+                                            
+                                            backup_files.push(BackupFileInfo {
+                                                path: path.to_string_lossy().to_string(),
+                                                filename: filename_str.to_string(),
+                                                size: metadata.len(),
+                                                modified,
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Sort by modification time (newest first)
+    backup_files.sort_by(|a, b| b.modified.cmp(&a.modified));
+    
+    Ok(backup_files)
+}
+
+#[tauri::command]
+fn delete_backup_file(file_path: String) -> Result<(), String> {
+    let path = PathBuf::from(&file_path);
+    
+    // Safety check: only allow deleting .zip files with "homemap" in the name
+    if let Some(extension) = path.extension() {
+        if extension != "zip" {
+            return Err("Can only delete .zip files".to_string());
+        }
+    } else {
+        return Err("File has no extension".to_string());
+    }
+    
+    if let Some(filename) = path.file_name() {
+        if let Some(filename_str) = filename.to_str() {
+            let filename_lower = filename_str.to_lowercase();
+            if !filename_lower.contains("homemap") {
+                return Err("Can only delete HomeMap backup files".to_string());
+            }
+        }
+    }
+    
+    // Delete the file
+    fs::remove_file(&path)
+        .map_err(|e| format!("Failed to delete file: {}", e))?;
+    
+    println!("Deleted backup file: {}", file_path);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1344,6 +1810,7 @@ pub fn run() {
             get_data_path, 
             read_image_as_base64,
             write_file_base64,
+            save_temp_file,
             read_bundled_asset,
             read_file_as_text,
             read_widget_json,
@@ -1359,7 +1826,12 @@ pub fn run() {
             create_dir,
             path_exists,
             is_directory,
-            create_backup
+            create_backup,
+            restore_homemap_data,
+            list_backup_files,
+            delete_backup_file,
+            is_mobile_platform,
+            apply_ui_preferences_to_current_config
         ])
         .setup(|app| {
             // Mobile: Initialize data directory with bundled resources

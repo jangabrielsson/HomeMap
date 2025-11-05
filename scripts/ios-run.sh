@@ -24,7 +24,7 @@ fi
 echo "Using simulator: $SIM_ID"
 
 # Find the app bundle (exclude Archive paths, prefer DerivedData/Build/Products)
-APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData/homemap-"* -name "HomeMap.app" -path "*/Build/Products/release-iphonesimulator/*" 2>/dev/null | head -1)
+APP_PATH=$(find "$HOME/Library/Developer/Xcode/DerivedData" -name "HomeMap.app" -path "*/Build/Products/release-iphonesimulator/*" 2>/dev/null | head -1)
 
 if [ -z "$APP_PATH" ]; then
     echo "❌ App bundle not found! Did you run ios-build.sh first?"
