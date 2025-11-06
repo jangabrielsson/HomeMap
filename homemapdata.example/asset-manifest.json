@@ -8,7 +8,13 @@
         "README.md",
         "icons/built-in/doorSensor/closed.svg",
         "icons/built-in/doorSensor/open.svg",
+        "icons/built-in/blinds/closed.png",
+        "icons/built-in/blinds/half.png",
+        "icons/built-in/blinds/open.png",
         "icons/built-in/humiditymeter/humidity.svg",
+        "icons/built-in/curtain/closed.png",
+        "icons/built-in/curtain/half.png",
+        "icons/built-in/curtain/open.png",
         "icons/built-in/genericDevice/default.svg",
         "icons/built-in/windowSensor/closed.svg",
         "icons/built-in/windowSensor/open.svg",
@@ -22,6 +28,8 @@
         "icons/built-in/doorLock/open.png",
         "icons/built-in/energymeter/energy.png",
         "icons/built-in/gauge/gauge.svg",
+        "icons/built-in/smokeSensor/on.png",
+        "icons/built-in/smokeSensor/off.png",
         "icons/built-in/motionSensor/safe.svg",
         "icons/built-in/motionSensor/breached.svg",
         "icons/built-in/Temperature/icon.svg",
@@ -38,7 +46,9 @@
         "widgets/built-in/temperature.json",
         "widgets/built-in/gauge.json",
         "widgets/built-in/windowSensor.json",
-        "widgets/built-in/lightdim.json"
+        "widgets/built-in/lightdim.json",
+        "widgets/built-in/smokeSensor.json",
+        "widgets/built-in/curtain.json"
 
   ]
 }

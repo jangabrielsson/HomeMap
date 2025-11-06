@@ -5,31 +5,43 @@
 
 set -e
 
-PACKAGE_NAME="com.homemap.app"
+cd "$(dirname "$0")/.."
+
+PACKAGE_NAME="com.gabrielsson.homemap"
+ADB="$ANDROID_HOME/platform-tools/adb"
+
 # Look for debug APK first (signed for development)
 APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*-debug.apk" | head -1)
 
-cd "$(dirname "$0")/.."
+# If no debug APK, look for release
+if [ -z "$APK_PATH" ]; then
+    APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*-release-unsigned.apk" | head -1)
+fi
 
 # Check if emulator/device is connected
-if ! adb devices | grep -q "device$"; then
+if ! $ADB devices | grep -q "device$"; then
     echo "Error: No Android device or emulator connected"
     echo "Run ./scripts/android-start-emulator.sh first"
     exit 1
 fi
 
 # Check if APK exists
-if [ ! -f "$APK_PATH" ]; then
+if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
     echo "APK not found. Building first..."
     ./scripts/android-build.sh
+    APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*-debug.apk" | head -1)
+    if [ -z "$APK_PATH" ]; then
+        APK_PATH=$(find src-tauri/gen/android/app/build/outputs/apk -name "*-release-unsigned.apk" | head -1)
+    fi
 fi
 
 echo "Installing HomeMap on Android device..."
-adb install -r "$APK_PATH"
+echo "APK: $APK_PATH"
+$ADB install -r "$APK_PATH"
 
 echo ""
 echo "Launching HomeMap..."
-adb shell am start -n "$PACKAGE_NAME/.MainActivity"
+$ADB shell am start -n "$PACKAGE_NAME/.MainActivity"
 
 echo ""
 echo "✓ HomeMap is running!"

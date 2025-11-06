@@ -16,6 +16,26 @@ export class WidgetManager {
      * Now supports package-aware icon loading
      */
     async loadIconSet(iconSetName, packageId = null) {
+        // Handle legacy full-path format from backups: "icons/built-in/dimLight"
+        // Extract the actual iconSet name and infer packageId if not provided
+        if (iconSetName && iconSetName.includes('/')) {
+            const parts = iconSetName.split('/');
+            if (parts[0] === 'icons') {
+                if (parts[1] === 'built-in' && parts.length >= 3) {
+                    // "icons/built-in/dimLight" -> iconSetName="dimLight", packageId="com.fibaro.built-in"
+                    iconSetName = parts.slice(2).join('/');
+                    if (!packageId) packageId = 'com.fibaro.built-in';
+                } else if (parts[1] === 'packages' && parts.length >= 4) {
+                    // "icons/packages/my-package/iconset" -> iconSetName="iconset", packageId="my-package"
+                    if (!packageId) packageId = parts[2];
+                    iconSetName = parts.slice(3).join('/');
+                } else if (parts.length >= 2) {
+                    // "icons/dimLight" -> iconSetName="dimLight", no package (legacy root location)
+                    iconSetName = parts.slice(1).join('/');
+                }
+            }
+        }
+        
         const cacheKey = packageId ? `${packageId}/${iconSetName}` : iconSetName;
         
         // Check cache first

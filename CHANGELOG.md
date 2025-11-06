@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.29] - 2025-11-06
+
+### Added
+- **iOS/iPadOS Platform Support**: HomeMap now runs on iPad and iPhone
+  - Native iOS app with full feature parity
+  - Optimized for iPad tablet interface
+  - Works on iPhone (iOS 13.0+) and iPad (iPadOS 13.0+)
+  - Supports both simulator testing and real device deployment
+- **Android Platform Support**: HomeMap now runs on Android tablets
+  - Universal APK supports all Android devices (ARM64, ARM32, x86)
+  - Minimum Android version: 7.0 (Nougat) / API 24
+  - Full feature parity with desktop and iOS versions
+- **Cross-Platform Backup/Restore**: Seamlessly backup and restore across all platforms
+  - Create backup on macOS → restore on iPad/Android
+  - Create backup on iPad → restore on Android/macOS
+  - Uses iCloud, Google Drive, or file transfer
+  - All configurations, floor plans, and icons transfer correctly
+- **New Widgets**:
+  - `curtain` - Control and monitor curtain/drape devices
+  - `smokeSensor` - Display smoke detector status with visual alerts
+- **New Icon Sets**:
+  - `curtain` - Icons for curtain/drape controls
+  - `blinds` - Additional blind/shade icons
+  - `smokeSensor` - Smoke detector status icons
+- **Shift-Key Grid Snapping**: Hold Shift while dragging widgets to snap to 5px grid
+  - Helps align widgets precisely on floor plans
+  - Only active in edit mode
+  - Works on all desktop platforms
+
+### Fixed
+- **Cross-Platform Icon Path Resolution**: Fixed icon loading when restoring backups across platforms
+  - Properly handles legacy full-path format (`"icons/built-in/dimLight"`)
+  - Automatically extracts icon set name and location from backup paths
+  - Maintains distinction between built-in and user icon sets
+  - Icons now display correctly when restoring macOS/iOS backups on Android and vice versa
+
+### Changed
+- Improved icon set loading to handle multiple path formats for better cross-platform compatibility
+
 ## [0.1.25] - 2025-10-31
 
 ### Added
