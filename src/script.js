@@ -18,6 +18,7 @@ import { HC3ApiManager } from './modules/hc3ApiManager.js';
 import { AutoMapManager } from './modules/autoMapManager.js';
 import { DeviceManagementView } from './modules/deviceManagementView.js';
 import { FloorManagementDialog } from './modules/floorManagementDialog.js';
+import { RemoteWidgetManager } from './modules/remoteWidgetManager.js';
 import packageManager from './modules/packageManager.js';
 
 class HomeMap {
@@ -48,6 +49,7 @@ class HomeMap {
         this.autoMapManager = new AutoMapManager(this);
         this.deviceManagementView = new DeviceManagementView(this);
         this.floorManagementDialog = new FloorManagementDialog(this);
+        this.remoteWidgetManager = new RemoteWidgetManager(this);
         
         // Zoom state
         this.zoomLevel = 100; // Default 100%
@@ -174,6 +176,33 @@ class HomeMap {
         
         browseHomemapPath.onclick = async () => {
             await this.browseHomemapPath();
+        };
+        
+        // WebSocket server controls
+        const wsStartServer = document.getElementById('wsStartServer');
+        const wsStopServer = document.getElementById('wsStopServer');
+        
+        wsStartServer.onclick = async () => {
+            const port = parseInt(document.getElementById('wsPort').value) || 8765;
+            const bindAddress = document.getElementById('wsBindAddress').value || '0.0.0.0';
+            
+            const success = await this.remoteWidgetManager.startServer(port, bindAddress);
+            if (success) {
+                wsStartServer.disabled = true;
+                wsStopServer.disabled = false;
+                // Check the "Enable WebSocket Server" checkbox when server starts
+                document.getElementById('wsEnabled').checked = true;
+            }
+        };
+        
+        wsStopServer.onclick = async () => {
+            const success = await this.remoteWidgetManager.stopServer();
+            if (success) {
+                wsStartServer.disabled = false;
+                wsStopServer.disabled = true;
+                // Uncheck the "Enable WebSocket Server" checkbox when server stops
+                document.getElementById('wsEnabled').checked = false;
+            }
         };
         
         // Backup HomeMap button
@@ -355,6 +384,28 @@ class HomeMap {
                 document.getElementById('opacityValue').textContent = `${e.target.value}%`;
             });
             
+            // Load WebSocket settings from homemapConfig
+            const wsConfig = this.homemapConfig?.websocket || {
+                enabled: false,
+                port: 8765,
+                bindAddress: '0.0.0.0',
+                autoStart: false
+            };
+            document.getElementById('wsEnabled').checked = wsConfig.enabled || false;
+            document.getElementById('wsPort').value = wsConfig.port || 8765;
+            document.getElementById('wsBindAddress').value = wsConfig.bindAddress || '0.0.0.0';
+            
+            // Update server button states
+            const wsStartServer = document.getElementById('wsStartServer');
+            const wsStopServer = document.getElementById('wsStopServer');
+            if (this.remoteWidgetManager && this.remoteWidgetManager.serverRunning) {
+                wsStartServer.disabled = true;
+                wsStopServer.disabled = false;
+            } else {
+                wsStartServer.disabled = false;
+                wsStopServer.disabled = true;
+            }
+            
             // Load and display installed packages
             await this.loadInstalledPackages();
             
@@ -511,6 +562,25 @@ class HomeMap {
             
             // Apply widget background settings immediately
             this.applyWidgetBackgroundSettings();
+            
+            // Save WebSocket settings to homemapConfig
+            if (this.homemapConfig) {
+                const wsEnabled = document.getElementById('wsEnabled').checked;
+                const wsPort = parseInt(document.getElementById('wsPort').value) || 8765;
+                const wsBindAddress = document.getElementById('wsBindAddress').value || '0.0.0.0';
+                
+                this.homemapConfig.websocket = {
+                    enabled: wsEnabled,
+                    port: wsPort,
+                    bindAddress: wsBindAddress,
+                    autoStart: wsEnabled  // Auto-start if enabled
+                };
+                
+                // Save homemapConfig with WebSocket settings
+                const filePath = `${this.dataPath}/config.json`;
+                const content = JSON.stringify(this.homemapConfig, null, 4);
+                await this.invoke('save_config', { filePath, content });
+            }
             
             // Reload config so the app uses the new credentials
             this.config = await this.invoke('get_hc3_config');
@@ -1068,16 +1138,31 @@ class HomeMap {
         // Show/hide zoom controls and auto-discover button
         const zoomControls = document.getElementById('zoomControls');
         const autoDiscoverBtn = document.getElementById('autoDiscoverBtn');
+        const widgetPalette = document.getElementById('widgetPalette');
         
         if (this.editMode) {
             zoomControls.style.display = 'flex';
             autoDiscoverBtn.style.display = 'block';
+            widgetPalette.style.display = 'flex';
+            
+            // Update widget palette with current remote widgets
+            if (this.remoteWidgetManager) {
+                this.remoteWidgetManager.updateWidgetPalette();
+                // Setup drop zones for remote widgets
+                this.remoteWidgetManager.setupFloorDropZones();
+            }
             
             // Reposition all devices to sync with current layout
             this.floorManager.repositionAllDevices();
         } else {
             zoomControls.style.display = 'none';
             autoDiscoverBtn.style.display = 'none';
+            widgetPalette.style.display = 'none';
+            
+            // Reposition devices after palette closes (wait for CSS transition)
+            setTimeout(() => {
+                this.floorManager.repositionAllDevices();
+            }, 350); // Slightly longer than the 300ms transition
         }
         
         // Update all device elements
@@ -1310,6 +1395,10 @@ You can also configure floor plans and manage devices once connected!`;
             // Initialize widget manager now that we have dataPath
             this.widgetManager = new WidgetManager(this.dataPath, this.invoke);
             
+            // Initialize remote widget manager
+            this.remoteWidgetManager = new RemoteWidgetManager(this);
+            await this.remoteWidgetManager.initialize();
+            
             this.homemapConfig = await this.invoke('get_homemap_config');
             console.log('HomeMap config:', this.homemapConfig);
             
@@ -1354,6 +1443,11 @@ You can also configure floor plans and manage devices once connected!`;
                 }
             } else {
                 console.log('No devices configured, skipping event polling');
+            }
+            
+            // Auto-start WebSocket server if configured
+            if (this.remoteWidgetManager) {
+                await this.remoteWidgetManager.autoStartServerIfConfigured();
             }
         } catch (error) {
             console.error('Failed to load HomeMap config:', error);

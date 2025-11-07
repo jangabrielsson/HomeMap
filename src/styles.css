@@ -162,6 +162,95 @@ main {
     flex: 1;
     display: flex;
     min-height: 0;
+    position: relative;
+}
+
+/* Widget Palette Sidebar */
+.widget-palette {
+    width: 280px;
+    background: #252525;
+    border-right: 2px solid #333;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.widget-palette-header {
+    padding: 15px;
+    border-bottom: 2px solid #333;
+    background: #2a2a2a;
+}
+
+.widget-palette-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0;
+    color: #e0e0e0;
+}
+
+.widget-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.widget-palette-item {
+    background: #2a2a2a;
+    border: 2px solid #444;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 10px;
+    cursor: move;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.widget-palette-item:hover {
+    background: #333;
+    border-color: #666;
+    transform: translateX(4px);
+}
+
+.widget-palette-item.remote {
+    border-color: #4a90e2;
+    background: linear-gradient(135deg, #2a2a2a 0%, #2a3a4a 100%);
+}
+
+.widget-palette-item.remote:hover {
+    border-color: #5aa0f2;
+    background: linear-gradient(135deg, #333 0%, #3a4a5a 100%);
+}
+
+.widget-palette-item .widget-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+    text-align: center;
+}
+
+.widget-palette-item .widget-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #e0e0e0;
+    text-align: center;
+}
+
+.widget-palette-item .widget-type {
+    font-size: 11px;
+    color: #888;
+    text-align: center;
+    margin-top: 4px;
 }
 
 .tabs {
@@ -1627,3 +1716,147 @@ main {
     border-top: 2px solid #333;
     background: #222;
 }
+
+/* WebSocket Server Controls */
+.ws-server-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 5px;
+}
+
+.status-badge {
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid #555;
+}
+
+.status-badge.running {
+    background: rgba(76, 175, 80, 0.2);
+    border-color: #4caf50;
+    color: #4caf50;
+}
+
+.ws-clients-list {
+    margin-top: 10px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    border: 1px solid #444;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.ws-client-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    margin: 5px 0;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+    border: 1px solid #555;
+}
+
+.ws-client-name {
+    flex: 1;
+    font-weight: 600;
+    color: #4caf50;
+}
+
+.ws-client-widgets {
+    font-size: 12px;
+    color: #888;
+}
+
+/* Remote Widget Palette */
+.remote-widgets-section {
+    margin-top: 20px;
+    padding: 10px;
+    background: rgba(66, 165, 245, 0.1);
+    border: 1px solid rgba(66, 165, 245, 0.3);
+    border-radius: 6px;
+}
+
+.remote-widgets-section h3 {
+    color: #42a5f5;
+    margin: 0 0 10px 0;
+    font-size: 14px;
+}
+
+.remote-widget-group {
+    margin-bottom: 15px;
+}
+
+.qa-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    margin-bottom: 8px;
+}
+
+.qa-header strong {
+    color: #42a5f5;
+}
+
+.widget-count {
+    font-size: 12px;
+    color: #888;
+}
+
+.remote-widget-list {
+    display: grid;
+    gap: 8px;
+}
+
+.widget-palette-item.remote {
+    background: rgba(66, 165, 245, 0.1);
+    border-color: #42a5f5;
+}
+
+.widget-palette-item.remote:hover {
+    background: rgba(66, 165, 245, 0.2);
+}
+
+/* Remote Widget on Floor */
+.device-widget.remote-widget {
+    border: 2px solid #42a5f5;
+}
+
+.device.remote-widget {
+    border: 2px solid #42a5f5;
+    /* Transition only opacity and border - NOT position for smooth dragging */
+    transition: opacity 0.3s ease, border-color 0.3s ease, filter 0.3s ease;
+}
+
+.device-widget.remote-widget.disconnected {
+    opacity: 0.5;
+    border-color: #e74c3c;
+    filter: grayscale(80%);
+    cursor: not-allowed !important;
+}
+
+.device.remote-widget.disconnected {
+    opacity: 0.5;
+    border-color: #e74c3c;
+    filter: grayscale(80%);
+    cursor: not-allowed !important;
+}
+
+.device.remote-widget.disconnected .device-text {
+    color: #ff6b6b !important;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.device.remote-widget.disconnected .device-icon {
+    filter: grayscale(100%);
+}
+
+

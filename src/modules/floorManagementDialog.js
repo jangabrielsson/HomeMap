@@ -143,12 +143,12 @@ export class FloorManagementDialog {
                     };
 
                     previewContainer.style.display = 'block';
-                    imagePath.textContent = result.split('/').pop();
+                    imagePath.textContent = result.split(/[/\\]/).pop(); // Handle both / and \ path separators
                     
                     selectedImageData = {
                         path: result,
                         dataUrl: dataUrl,
-                        filename: result.split('/').pop()
+                        filename: result.split(/[/\\]/).pop() // Handle both / and \ path separators
                     };
 
                     // Enable save button if name is also filled
@@ -398,7 +398,7 @@ export class FloorManagementDialog {
                     newImageData = {
                         path: result,
                         dataUrl: dataUrl,
-                        filename: result.split('/').pop()
+                        filename: result.split(/[/\\]/).pop() // Handle both / and \ path separators
                     };
                 }
             } catch (error) {

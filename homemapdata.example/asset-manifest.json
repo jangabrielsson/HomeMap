@@ -32,6 +32,7 @@
         "icons/built-in/smokeSensor/off.png",
         "icons/built-in/motionSensor/safe.svg",
         "icons/built-in/motionSensor/breached.svg",
+        "icons/built-in/defaultButton/icon.png",
         "icons/built-in/Temperature/icon.svg",
         "widgets/built-in/doorSensor.json",
         "widgets/built-in/motion.json",

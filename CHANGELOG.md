@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Remote Widgets**: Changed default icon from `binarySwitch` to `defaultButton`
+  - Better represents action buttons vs. toggle switches
+  - More appropriate for generic remote widget functions
+
 ## [1.0.29] - 2025-11-06
 
 ### Added

@@ -7,7 +7,9 @@
     "dev": "tauri dev",
     "build": "tauri build"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"
   }

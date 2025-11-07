@@ -31,6 +31,10 @@ export class FloorManager {
             const img = container?.querySelector('.floor-image');
             if (container && img && img.complete) {
                 this.repositionDevices(floor.id, container, img);
+                // Also reposition remote widgets
+                if (this.homeMap.remoteWidgetManager) {
+                    this.homeMap.remoteWidgetManager.repositionRemoteWidgets(floor.id, container, img);
+                }
             }
         });
     }
@@ -127,6 +131,11 @@ export class FloorManager {
             
             // Restore zoom for first floor
             this.homeMap.restoreZoomForFloor(config.floors[0].id);
+            
+            // Restore any saved remote widgets after floors are rendered
+            if (this.homeMap.remoteWidgetManager) {
+                this.homeMap.remoteWidgetManager.restoreAllSavedWidgets();
+            }
         }
     }
 

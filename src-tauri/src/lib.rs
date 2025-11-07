@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod websocket;
+
 use tauri::Manager;
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
 use tauri::menu::{Menu, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
@@ -12,9 +14,13 @@ use std::path::PathBuf;
 use std::fs;
 use std::collections::HashMap;
 use base64::Engine;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 #[cfg(target_os = "android")]
 use tauri_plugin_fs::FsExt;
+
+use websocket::WebSocketServer;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct HttpFetchResponse {
@@ -1787,6 +1793,108 @@ fn delete_backup_file(file_path: String) -> Result<(), String> {
     Ok(())
 }
 
+// ============================================================================
+// WebSocket Commands
+// ============================================================================
+
+#[tauri::command]
+async fn ws_start_server(
+    port: u16,
+    bind_address: String,
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut server_opt = state.lock().await;
+    
+    if server_opt.is_some() {
+        return Err("WebSocket server is already running".to_string());
+    }
+    
+    let server = Arc::new(WebSocketServer::new(app));
+    server.start(port, bind_address).await?;
+    
+    *server_opt = Some(server);
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn ws_stop_server(
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+) -> Result<(), String> {
+    let mut server_opt = state.lock().await;
+    
+    if let Some(server) = server_opt.take() {
+        server.stop().await?;
+        Ok(())
+    } else {
+        Err("WebSocket server is not running".to_string())
+    }
+}
+
+#[tauri::command]
+async fn ws_send_to_client(
+    client_id: String,
+    message: serde_json::Value,
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+) -> Result<(), String> {
+    let server_opt = state.lock().await;
+    
+    if let Some(server) = server_opt.as_ref() {
+        server.send_to_client(&client_id, message).await
+    } else {
+        Err("WebSocket server is not running".to_string())
+    }
+}
+
+#[tauri::command]
+async fn ws_broadcast(
+    message: serde_json::Value,
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+) -> Result<(), String> {
+    let server_opt = state.lock().await;
+    
+    if let Some(server) = server_opt.as_ref() {
+        server.broadcast(message).await
+    } else {
+        Err("WebSocket server is not running".to_string())
+    }
+}
+
+#[tauri::command]
+async fn ws_get_connected_clients(
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+) -> Result<Vec<String>, String> {
+    let server_opt = state.lock().await;
+    
+    if let Some(server) = server_opt.as_ref() {
+        Ok(server.get_connected_clients().await)
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+#[tauri::command]
+async fn ws_is_server_running(
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+) -> Result<bool, String> {
+    let server_opt = state.lock().await;
+    Ok(server_opt.is_some())
+}
+
+#[tauri::command]
+async fn ws_request_widgets(
+    state: tauri::State<'_, Arc<Mutex<Option<Arc<WebSocketServer>>>>>,
+) -> Result<(), String> {
+    let server_opt = state.lock().await;
+    
+    if let Some(server) = server_opt.as_ref() {
+        server.request_all_widgets().await
+    } else {
+        Err("WebSocket server is not running".to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -1802,6 +1910,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build());
     
     builder
+        .manage(Arc::new(Mutex::new(None::<Arc<WebSocketServer>>)))
         .invoke_handler(tauri::generate_handler![
             http_fetch_insecure,
             get_hc3_config, 
@@ -1831,7 +1940,14 @@ pub fn run() {
             list_backup_files,
             delete_backup_file,
             is_mobile_platform,
-            apply_ui_preferences_to_current_config
+            apply_ui_preferences_to_current_config,
+            ws_start_server,
+            ws_stop_server,
+            ws_send_to_client,
+            ws_broadcast,
+            ws_get_connected_clients,
+            ws_is_server_running,
+            ws_request_widgets
         ])
         .setup(|app| {
             // Mobile: Initialize data directory with bundled resources

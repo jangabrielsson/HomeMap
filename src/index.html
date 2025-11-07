@@ -59,6 +59,16 @@
         <div class="tabs" id="floorTabs"></div>
         
         <main>
+            <!-- Widget Palette Sidebar (shown in Edit Mode) -->
+            <div id="widgetPalette" class="widget-palette" style="display: none;">
+                <div class="widget-palette-header">
+                    <h3>📦 Widgets</h3>
+                </div>
+                <div id="widget-list" class="widget-list">
+                    <!-- Remote widgets will appear here -->
+                </div>
+            </div>
+            
             <div class="floor-container" id="floorContainer">
                 <p>Loading floors...</p>
             </div>
@@ -152,6 +162,43 @@
                         <span id="opacityValue">50%</span>
                     </div>
                     <small>Transparency level (0% = invisible, 100% = opaque)</small>
+                </div>
+                
+                <h3>🔌 WebSocket Server (QuickApp Widgets)</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="wsEnabled">
+                        Enable WebSocket server for remote widgets
+                    </label>
+                    <small>Allows HC3 QuickApps to register interactive widgets</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="wsPort">WebSocket Port</label>
+                    <input type="number" id="wsPort" placeholder="8765" min="1024" max="65535" value="8765">
+                    <small>Port for QuickApps to connect to (default: 8765)</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="wsBindAddress">Bind Address</label>
+                    <input type="text" id="wsBindAddress" placeholder="0.0.0.0" value="0.0.0.0">
+                    <small>Network interface to listen on (0.0.0.0 = all, 127.0.0.1 = localhost only)</small>
+                </div>
+                
+                <div class="form-group">
+                    <div class="ws-server-controls">
+                        <button id="wsStartServer" class="secondary-button">▶️ Start Server</button>
+                        <button id="wsStopServer" class="secondary-button" disabled>⏹️ Stop Server</button>
+                        <span id="ws-server-status" class="status-badge">⚫ Server Stopped</span>
+                    </div>
+                    <small>Manually control the WebSocket server</small>
+                </div>
+                
+                <div class="form-group" id="wsConnectedClients" style="display: none;">
+                    <label>Connected QuickApps:</label>
+                    <div id="wsClientsList" class="ws-clients-list">
+                        <!-- Connected clients will appear here -->
+                    </div>
                 </div>
                 
                 <h3>Widget Packages</h3>
