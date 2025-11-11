@@ -22,7 +22,7 @@ FEATURES:
 -- Configuration
 local HOMEMAP_IP = "192.168.1.100"  -- <<< CHANGE THIS to your HomeMap IP
 local HOMEMAP_PORT = 8765
-local RECONNECT_DELAY = 5000  -- milliseconds
+local RECONNECT_DELAY = 5000  -- millisecondss
 
 function QuickApp:onInit()
     self:debug("HomeMap Remote Widget QuickApp starting...")
