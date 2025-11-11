@@ -10,8 +10,8 @@ This project now includes automated building and releases for multiple platforms
 **Purpose:** Test builds on all platforms before merging
 
 **Jobs:**
-- **Desktop Test:** Builds on Ubuntu, Windows, macOS
-- **Android Test:** Tests Android compilation (ARM64 only for speed)
+- **Desktop Test:** Windows + macOS compilation testing
+- **Android Test:** Android build compilation testing
 
 ### 2. Release Workflow (`.github/workflows/release.yml`)
 
@@ -46,10 +46,16 @@ This project now includes automated building and releases for multiple platforms
 ## Release Assets
 
 Each release includes:
-- `HomeMap_*_aarch64.dmg` - macOS Apple Silicon
+- `HomeMap_*_aarch64.dmg` - macOS Apple Silicon (M1/M2/M3)
 - `HomeMap_*_x64.dmg` - macOS Intel  
 - `HomeMap_*_x64-setup.exe` - Windows installer
 - `app-universal-release.apk` - Android APK (all architectures)
+
+**Supported Platforms:**
+- ✅ **macOS** (Intel + Apple Silicon)
+- ✅ **Windows** (x64)  
+- ✅ **Android** (ARM64, ARMv7, x86, x86_64)
+- ❌ **Linux Desktop** (not included in releases)
 
 ## Android Build Details
 
@@ -72,6 +78,24 @@ The Android build:
 **Secrets:** (for future signing)
 - `TAURI_SIGNING_PRIVATE_KEY` - For desktop app signing
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` - For desktop app signing
+
+## Performance Optimizations
+
+### Caching Strategy
+To speed up builds, especially the heavy Android setup, we cache:
+
+- **Android SDK/NDK**: ~1GB+ of tools, saves 5-10 minutes per build
+- **Rust Dependencies**: Cargo registry and compiled targets
+- **Tauri CLI**: Avoid reinstalling the CLI every time
+- **Node Modules**: NPM dependency cache (handled by setup-node)
+
+### Cache Keys
+- **Desktop**: `cargo-{os}-desktop-{lockfile-hash}`
+- **Android**: `cargo-{os}-android-{lockfile-hash}`
+- **Android SDK**: `android-sdk-{os}-ndk-29.0.14206865-build-tools-34.0.0`
+- **Tauri CLI**: `tauri-cli-{os}-v2`
+
+First builds will be slower as caches populate, but subsequent builds should be significantly faster.
 
 ## Troubleshooting
 
