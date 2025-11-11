@@ -26,6 +26,20 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev
+        
       - name: Install frontend dependencies
         run: npm install --package-lock=false || echo "{}" > package.json && npm install --package-lock=false
         
