@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  desktop-test:
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, windows-latest, macos-latest]
+    
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Install frontend dependencies
+        run: npm install --package-lock=false || echo "{}" > package.json && npm install --package-lock=false
+        
+      - name: Check Rust compilation
+        run: cd src-tauri && cargo check
+        
+  android-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        
+      - name: Install Android NDK
+        run: |
+          sdkmanager --install "ndk;29.0.14206865"
+          sdkmanager --install "build-tools;34.0.0"
+          sdkmanager --install "platforms;android-34"
+          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
+          
+      - name: Install frontend dependencies
+        run: npm install --package-lock=false || echo "{}" > package.json && npm install --package-lock=false
+        
+      - name: Generate asset manifest
+        run: |
+          chmod +x scripts/generate-asset-manifest.sh
+          ./scripts/generate-asset-manifest.sh
+          
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2.0.0"
+        
+      - name: Test Android project initialization
+        run: cargo tauri android init --ci
+        env:
+          ANDROID_HOME: $ANDROID_SDK_ROOT
+          ANDROID_NDK_ROOT: $ANDROID_SDK_ROOT/ndk/29.0.14206865
+          NDK_HOME: $ANDROID_SDK_ROOT/ndk/29.0.14206865
+          
+      - name: Check Android compilation (ARM64 only for CI speed)
+        run: cargo tauri android build --target aarch64 --verbose
+        env:
+          ANDROID_HOME: $ANDROID_SDK_ROOT
+          ANDROID_NDK_ROOT: $ANDROID_SDK_ROOT/ndk/29.0.14206865
+          NDK_HOME: $ANDROID_SDK_ROOT/ndk/29.0.14206865
