@@ -1,6 +1,6 @@
 {
   "name": "homemap",
-  "version": "0.1.0",
+  "version": "0.1.32",
   "description": "HC3 Home Automation Map Visualization",
   "scripts": {
     "tauri": "tauri",
