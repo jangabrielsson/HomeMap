@@ -822,12 +822,17 @@ class HomeMap {
                         }]
                     });
                     
+                    console.log('🔍 Dialog returned:', selected, 'Type:', typeof selected);
+                    
                     if (selected) {
                         filePathInput.value = selected;
                         doRestoreBtn.disabled = false;
                         warningBox.style.display = 'block';
                         console.log('✅ File selected, button ENABLED, path:', selected);
                         console.log('✅ Button disabled status after enable:', doRestoreBtn.disabled);
+                    } else {
+                        console.log('⚠️ No file selected or dialog returned null/undefined');
+                        alert('No file was selected. The file picker returned empty. Please try again or use "Show Available Backups" instead.');
                     }
                 } catch (error) {
                     console.error('Failed to select backup file:', error);
@@ -1141,9 +1146,15 @@ class HomeMap {
         const widgetPalette = document.getElementById('widgetPalette');
         
         if (this.editMode) {
+            // Add edit-mode class to body for CSS styling (e.g., touch-action)
+            document.body.classList.add('edit-mode');
+            
             zoomControls.style.display = 'flex';
             autoDiscoverBtn.style.display = 'block';
-            widgetPalette.style.display = 'flex';
+            
+            // Only show widget palette if there are remote widgets available
+            const hasRemoteWidgets = this.remoteWidgetManager && this.remoteWidgetManager.remoteWidgets.size > 0;
+            widgetPalette.style.display = hasRemoteWidgets ? 'flex' : 'none';
             
             // Update widget palette with current remote widgets
             if (this.remoteWidgetManager) {
@@ -1155,6 +1166,9 @@ class HomeMap {
             // Reposition all devices to sync with current layout
             this.floorManager.repositionAllDevices();
         } else {
+            // Remove edit-mode class from body
+            document.body.classList.remove('edit-mode');
+            
             zoomControls.style.display = 'none';
             autoDiscoverBtn.style.display = 'none';
             widgetPalette.style.display = 'none';
@@ -1286,6 +1300,87 @@ You can also configure floor plans and manage devices once connected!`;
         });
     }
 
+    async syncBuiltinResourcesIfNeeded() {
+        try {
+            console.log('=== Checking if built-in resources need syncing ===');
+            
+            // Get app version from Rust
+            const appVersion = await this.invoke('get_app_version');
+            console.log('App version:', appVersion);
+            
+            // Check stored version
+            const versionFile = `${this.dataPath}/.builtin-version`;
+            let storedVersion = null;
+            
+            try {
+                storedVersion = await this.invoke('read_file_as_text', { filePath: versionFile });
+                storedVersion = storedVersion.trim();
+                console.log('Stored built-in version:', storedVersion);
+            } catch (err) {
+                console.log('No version file found - first run or needs sync');
+            }
+            
+            // Check if sync is needed
+            if (storedVersion === appVersion) {
+                console.log('Built-in resources already synced for version', appVersion);
+                return;
+            }
+            
+            console.log('Syncing built-in resources from bundled assets...');
+            
+            // Read manifest to find built-in resources
+            const manifestB64 = await this.invoke('read_bundled_asset', { 
+                assetPath: 'asset-manifest.json' 
+            });
+            const manifestJson = atob(manifestB64);
+            const manifest = JSON.parse(manifestJson);
+            
+            // Filter for built-in resources only (widgets/built-in/* and icons/built-in/*)
+            const builtinFiles = manifest.files.filter(file => 
+                file.startsWith('widgets/built-in/') || file.startsWith('icons/built-in/')
+            );
+            
+            console.log(`Found ${builtinFiles.length} built-in files to sync`);
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            // Sync each built-in file
+            for (const file of builtinFiles) {
+                try {
+                    const fileB64 = await this.invoke('read_bundled_asset', { 
+                        assetPath: file 
+                    });
+                    
+                    const targetPath = `${this.dataPath}/${file}`;
+                    await this.invoke('write_file_base64', { 
+                        filePath: targetPath,
+                        b64: fileB64 
+                    });
+                    
+                    successCount++;
+                } catch (err) {
+                    console.error(`Error syncing ${file}:`, err);
+                    errorCount++;
+                }
+            }
+            
+            console.log(`Built-in sync complete: ${successCount} succeeded, ${errorCount} failed`);
+            
+            // Update version file
+            if (successCount > 0 || builtinFiles.length === 0) {
+                await this.invoke('write_file_as_text', { 
+                    filePath: versionFile,
+                    content: appVersion 
+                });
+                console.log('Updated built-in version to', appVersion);
+            }
+            
+        } catch (error) {
+            console.error('Failed to sync built-in resources:', error);
+        }
+    }
+
     async copyBundledAssetsIfNeeded() {
         try {
             console.log('=== copyBundledAssetsIfNeeded STARTING ===');
@@ -1297,6 +1392,8 @@ You can also configure floor plans and manage devices once connected!`;
             console.log('Copied version from storage:', copiedVersion);
             if (copiedVersion === manifestVersion) {
                 console.log('Bundled assets already copied for version', manifestVersion);
+                // Still check if built-in resources need syncing (for app upgrades)
+                await this.syncBuiltinResourcesIfNeeded();
                 return;
             }
             
@@ -1307,6 +1404,8 @@ You can also configure floor plans and manage devices once connected!`;
                 if (testRead) {
                     console.log('Assets already exist (likely copied by Rust), skipping JS copy');
                     localStorage.setItem(versionKey, manifestVersion);
+                    // Still check if built-in resources need syncing
+                    await this.syncBuiltinResourcesIfNeeded();
                     return;
                 }
             } catch (err) {

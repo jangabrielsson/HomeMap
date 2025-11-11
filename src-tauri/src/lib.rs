@@ -325,11 +325,39 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
 }
 
 fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
-    if let Ok(template_dir) = find_template_directory() {
-        sync_builtin_resources_from_template(&template_dir, data_dir)?;
+    // Check if we need to sync based on version
+    let current_version = env!("CARGO_PKG_VERSION");
+    let version_file = data_dir.join(".builtin-version");
+    
+    let mut should_sync = false;
+    
+    // Read stored version
+    if let Ok(stored_version) = fs::read_to_string(&version_file) {
+        let stored_version = stored_version.trim();
+        if stored_version != current_version {
+            println!("App version changed from {} to {} - will sync built-in resources", stored_version, current_version);
+            should_sync = true;
+        } else {
+            println!("Built-in resources already synced for version {}", current_version);
+        }
     } else {
-        println!("Skipping built-in resource sync - template not found");
+        println!("No version file found - will sync built-in resources");
+        should_sync = true;
     }
+    
+    if should_sync {
+        if let Ok(template_dir) = find_template_directory() {
+            sync_builtin_resources_from_template(&template_dir, data_dir)?;
+            
+            // Update version file after successful sync
+            fs::write(&version_file, current_version)
+                .map_err(|e| format!("Failed to write version file: {}", e))?;
+            println!("Updated built-in version to {}", current_version);
+        } else {
+            println!("Skipping built-in resource sync - template not found");
+        }
+    }
+    
     Ok(())
 }
 
@@ -630,33 +658,210 @@ fn get_data_path() -> Result<String, String> {
 }
 
 #[tauri::command]
-fn read_image_as_base64(image_path: String) -> Result<String, String> {
-    let full_path = PathBuf::from(&image_path);
-    
-    if !full_path.exists() {
-        return Err(format!("Image not found: {:?}", full_path));
+fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+async fn read_image_as_base64(app: tauri::AppHandle, image_path: String) -> Result<String, String> {
+    // On Android, content:// URIs need to be read through ContentResolver using JNI
+    #[cfg(target_os = "android")]
+    {
+        if image_path.starts_with("content://") {
+            return read_android_content_uri(&image_path);
+        }
     }
     
-    let data = fs::read(&full_path)
-        .map_err(|e| format!("Failed to read image: {}", e))?;
+    // Regular file path handling for desktop platforms and non-content URIs
+    let mut full_path = PathBuf::from(&image_path);
     
-    // Detect image type from extension
-    let extension = full_path.extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("jpg")
-        .to_lowercase();
+    // On Android, use Tauri's fs plugin for reading files from app storage
+    #[cfg(target_os = "android")]
+    {
+        // If the path is relative (doesn't start with /), resolve it relative to app data directory
+        if !full_path.is_absolute() {
+            let app_data_dir = app.path().app_data_dir()
+                .map_err(|e| format!("Failed to get app data directory: {}", e))?;
+            full_path = app_data_dir.join(&image_path);
+            println!("Resolved relative path '{}' to absolute path: {:?}", image_path, full_path);
+        }
+        
+        use tauri_plugin_fs::FsExt;
+        let scope = app.fs_scope();
+        
+        // Check if path is in allowed scope
+        if scope.is_allowed(&full_path) || full_path.starts_with("/data/data/com.gabrielsson.homemap/") {
+            match std::fs::read(&full_path) {
+                Ok(data) => {
+                    // Detect image type and return base64
+                    let extension = full_path.extension()
+                        .and_then(|e| e.to_str())
+                        .map(|s| s.to_lowercase());
+                    
+                    let mime_type = if let Some(ext) = extension {
+                        match ext.as_str() {
+                            "png" => "image/png",
+                            "jpg" | "jpeg" => "image/jpeg",
+                            "gif" => "image/gif",
+                            "webp" => "image/webp",
+                            "svg" => "image/svg+xml",
+                            _ => detect_mime_from_magic_bytes(&data)
+                        }
+                    } else {
+                        detect_mime_from_magic_bytes(&data)
+                    };
+                    
+                    let base64_data = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+                    return Ok(format!("data:{};base64,{}", mime_type, base64_data));
+                },
+                Err(e) => return Err(format!("Failed to read image on Android from {:?}: {}", full_path, e))
+            }
+        } else {
+            return Err(format!("Path not in allowed scope: {:?}", full_path));
+        }
+    }
     
-    let mime_type = match extension.as_str() {
-        "png" => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "gif" => "image/gif",
-        "webp" => "image/webp",
-        "svg" => "image/svg+xml",
-        _ => "image/jpeg"
-    };
+    #[cfg(not(target_os = "android"))]
+    {
+        if !full_path.exists() {
+            return Err(format!("Image not found: {:?}", full_path));
+        }
+        
+        let data = fs::read(&full_path)
+            .map_err(|e| format!("Failed to read image: {}", e))?;
     
+        // Detect image type - first try extension, then magic bytes
+        let extension = full_path.extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_lowercase());
+        
+        let mime_type = if let Some(ext) = extension {
+            match ext.as_str() {
+                "png" => "image/png",
+                "jpg" | "jpeg" => "image/jpeg",
+                "gif" => "image/gif",
+                "webp" => "image/webp",
+                "svg" => "image/svg+xml",
+                _ => detect_mime_from_magic_bytes(&data)
+            }
+        } else {
+            // No extension, detect from magic bytes
+            detect_mime_from_magic_bytes(&data)
+        };
+        
+        let base64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
+        return Ok(format!("data:{};base64,{}", mime_type, base64));
+    }
+}
+
+#[cfg(target_os = "android")]
+fn read_android_content_uri(uri: &str) -> Result<String, String> {
+    use jni::objects::{JObject, JString};
+    use jni::JavaVM;
+    use std::io::Read;
+    
+    // Get the Java VM and JNI environment
+    let ctx = ndk_context::android_context();
+    let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }
+        .map_err(|e| format!("Failed to get JavaVM: {}", e))?;
+    
+    let mut env = vm.attach_current_thread()
+        .map_err(|e| format!("Failed to attach thread: {}", e))?;
+    
+    // Get ContentResolver from the Android context
+    let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+    let content_resolver = env.call_method(context, "getContentResolver", "()Landroid/content/ContentResolver;", &[])
+        .map_err(|e| format!("Failed to get ContentResolver: {}", e))?
+        .l()
+        .map_err(|e| format!("Failed to convert to object: {}", e))?;
+    
+    // Parse the URI
+    let uri_string = env.new_string(uri)
+        .map_err(|e| format!("Failed to create URI string: {}", e))?;
+    let uri_class = env.find_class("android/net/Uri")
+        .map_err(|e| format!("Failed to find Uri class: {}", e))?;
+    let uri_obj = env.call_static_method(
+        uri_class,
+        "parse",
+        "(Ljava/lang/String;)Landroid/net/Uri;",
+        &[(&uri_string).into()]
+    )
+        .map_err(|e| format!("Failed to parse URI: {}", e))?
+        .l()
+        .map_err(|e| format!("Failed to convert URI: {}", e))?;
+    
+    // Open InputStream from ContentResolver
+    let input_stream = env.call_method(
+        content_resolver,
+        "openInputStream",
+        "(Landroid/net/Uri;)Ljava/io/InputStream;",
+        &[(&uri_obj).into()]
+    )
+        .map_err(|e| format!("Failed to open input stream: {}", e))?
+        .l()
+        .map_err(|e| format!("Failed to convert stream: {}", e))?;
+    
+    if input_stream.is_null() {
+        return Err("Failed to open content URI: InputStream is null".to_string());
+    }
+    
+    // Read bytes from InputStream
+    let mut data = Vec::new();
+    let buffer_size = 4096;
+    let mut buffer = vec![0i8; buffer_size]; // JNI uses i8, not u8
+    
+    loop {
+        // Create a new byte array for reading
+        let byte_array = env.new_byte_array(buffer_size as i32)
+            .map_err(|e| format!("Failed to create byte array: {}", e))?;
+        
+        // Read into the array
+        let bytes_read = {
+            let array_for_read = unsafe { JObject::from_raw(byte_array.as_raw()) };
+            env.call_method(
+                &input_stream,
+                "read",
+                "([B)I",
+                &[(&array_for_read).into()]
+            )
+                .map_err(|e| format!("Failed to read bytes: {}", e))?
+                .i()
+                .map_err(|e| format!("Failed to convert read count: {}", e))?
+        };
+        
+        if bytes_read <= 0 {
+            break;
+        }
+        
+        // Get the bytes from the Java byte array
+        env.get_byte_array_region(&byte_array, 0, &mut buffer[..bytes_read as usize])
+            .map_err(|e| format!("Failed to get byte array region: {}", e))?;
+        
+        // Convert i8 to u8 and add to data
+        data.extend(buffer[..bytes_read as usize].iter().map(|&b| b as u8));
+    }
+    
+    // Close the stream
+    let _ = env.call_method(input_stream, "close", "()V", &[]);
+    
+    // Detect MIME type and encode
+    let mime_type = detect_mime_from_magic_bytes(&data);
     let base64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data);
     Ok(format!("data:{};base64,{}", mime_type, base64))
+}
+
+fn detect_mime_from_magic_bytes(data: &[u8]) -> &'static str {
+    if data.len() >= 8 && &data[0..8] == b"\x89PNG\r\n\x1a\n" {
+        "image/png"
+    } else if data.len() >= 2 && &data[0..2] == b"\xff\xd8" {
+        "image/jpeg"
+    } else if data.len() >= 6 && (&data[0..6] == b"GIF87a" || &data[0..6] == b"GIF89a") {
+        "image/gif"
+    } else if data.len() >= 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        "image/webp"
+    } else {
+        "image/jpeg" // default fallback
+    }
 }
 
 #[tauri::command]
@@ -1064,6 +1269,19 @@ fn write_file_base64(file_path: String, b64: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn write_file_as_text(file_path: String, content: String) -> Result<(), String> {
+    let path = std::path::PathBuf::from(&file_path);
+    if let Some(parent) = path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create parent dirs: {}", e))?;
+        }
+    }
+    std::fs::write(&path, content).map_err(|e| format!("Failed to write file {}: {}", file_path, e))?;
+    println!("Wrote text file to: {}", file_path);
+    Ok(())
+}
+
 // Save temporary file from byte array (for mobile file uploads)
 #[tauri::command]
 fn save_temp_file(file_name: String, data: Vec<u8>) -> Result<String, String> {
@@ -1394,16 +1612,48 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
     use std::io::Read;
     use zip::read::ZipArchive;
     
-    let backup_file_path = PathBuf::from(&backup_path);
     let target_dir = PathBuf::from(&target_path);
     
+    // On Android, handle content:// URIs by copying to a temporary file
+    let temp_file: Option<PathBuf>;
+    let actual_backup_path: PathBuf;
+    
+    #[cfg(target_os = "android")]
+    {
+        if backup_path.starts_with("content://") {
+            // Read content URI and save to temp file
+            let data = read_android_content_uri(&backup_path)?;
+            
+            // Create temp directory in the app's data directory (Android-safe)
+            let temp_dir = target_dir.parent().unwrap_or(&target_dir).join("temp");
+            fs::create_dir_all(&temp_dir)
+                .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+            let temp_path = temp_dir.join("homemap_restore_temp.zip");
+            
+            std::fs::write(&temp_path, &data)
+                .map_err(|e| format!("Failed to write temp file: {}", e))?;
+            
+            temp_file = Some(temp_path.clone());
+            actual_backup_path = temp_path;
+        } else {
+            temp_file = None;
+            actual_backup_path = PathBuf::from(&backup_path);
+        }
+    }
+    
+    #[cfg(not(target_os = "android"))]
+    {
+        temp_file = None;
+        actual_backup_path = PathBuf::from(&backup_path);
+    }
+    
     // Validate backup file exists
-    if !backup_file_path.exists() {
+    if !actual_backup_path.exists() {
         return Err("Backup file does not exist".to_string());
     }
     
     // Open and validate ZIP file
-    let file = File::open(&backup_file_path)
+    let file = File::open(&actual_backup_path)
         .map_err(|e| format!("Failed to open backup file: {}", e))?;
     
     let mut archive = ZipArchive::new(file)
@@ -1451,7 +1701,7 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
     println!("Backup validation passed: {} files, config.json size: {} bytes", file_count, config_size);
     
     // Validate config.json structure and version compatibility
-    let mut archive_for_validation = ZipArchive::new(File::open(&backup_file_path)
+    let mut archive_for_validation = ZipArchive::new(File::open(&actual_backup_path)
         .map_err(|e| format!("Failed to reopen backup file: {}", e))?)
         .map_err(|e| format!("Failed to read backup archive for validation: {}", e))?;
     
@@ -1513,8 +1763,11 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
             // Store UI preferences for later application (after restore)
             if let Some(prefs) = ui_preferences {
                 // We'll apply these after the restore completes
-                // Store them in a temporary location for now
-                let temp_prefs_path = std::env::temp_dir().join("homemap_ui_prefs.json");
+                // Store them in a temporary location in the app's data directory (Android-safe)
+                let temp_dir = target_dir.parent().unwrap_or(&target_dir).join("temp");
+                fs::create_dir_all(&temp_dir)
+                    .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+                let temp_prefs_path = temp_dir.join("homemap_ui_prefs.json");
                 let prefs_json = serde_json::to_string(&prefs)
                     .map_err(|e| format!("Failed to serialize UI preferences: {}", e))?;
                 fs::write(&temp_prefs_path, prefs_json)
@@ -1555,13 +1808,21 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
         let should_restore = match file_path.as_str() {
             p if p == "config.json" => options.restore_config,
             p if p.starts_with("images/") => options.restore_images,
+            // Restore icons but EXCLUDE built-in icons (they should come from current app version)
+            p if p.starts_with("icons/built-in/") => false,
             p if p.starts_with("icons/") => options.restore_icons,
+            // Restore widgets but EXCLUDE built-in widgets (they should come from current app version)
+            p if p.starts_with("widgets/built-in/") => false,
             p if p.starts_with("widgets/") => options.restore_widgets,
             p if p.ends_with("installed-packages.json") || p.ends_with("widget-mappings.json") => true, // Always restore these
             _ => true, // Restore other files by default
         };
         
         if !should_restore {
+            // Log when skipping built-in directories
+            if file_path.starts_with("icons/built-in/") || file_path.starts_with("widgets/built-in/") {
+                println!("Skipping built-in resource (keeping current app version): {}", file_path);
+            }
             continue;
         }
         
@@ -1587,7 +1848,8 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
     }
     
     // Apply UI preferences if they were extracted
-    let temp_prefs_path = std::env::temp_dir().join("homemap_ui_prefs.json");
+    let temp_dir = target_dir.parent().unwrap_or(&target_dir).join("temp");
+    let temp_prefs_path = temp_dir.join("homemap_ui_prefs.json");
     if temp_prefs_path.exists() {
         match fs::read_to_string(&temp_prefs_path) {
             Ok(prefs_json) => {
@@ -1612,6 +1874,12 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
     let mut result = "HomeMap data restored successfully!".to_string();
     if let Some(backup_loc) = backup_location {
         result = format!("{}\n\nYour previous data was backed up to: {}", result, backup_loc);
+    }
+    
+    // Clean up temp file if we created one for content URI
+    #[cfg(target_os = "android")]
+    if let Some(temp_path) = temp_file {
+        let _ = std::fs::remove_file(&temp_path);
     }
     
     Ok(result)
@@ -1916,9 +2184,11 @@ pub fn run() {
             get_hc3_config, 
             is_hc3_configured,
             get_homemap_config, 
-            get_data_path, 
+            get_data_path,
+            get_app_version,
             read_image_as_base64,
             write_file_base64,
+            write_file_as_text,
             save_temp_file,
             read_bundled_asset,
             read_file_as_text,

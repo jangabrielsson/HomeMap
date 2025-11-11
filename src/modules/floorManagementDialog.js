@@ -568,23 +568,37 @@ export class FloorManagementDialog {
             // Create directory
             await this.invoke('create_dir', { path: floorDir });
 
-            // Copy the image file
-            const targetPath = `${floorDir}/${imageData.filename}`;
+            // Generate a safe filename
+            // On Android, the path might be a content URI or document ID, so we can't use it directly
+            const timestamp = Date.now();
+            const extension = this.getExtensionFromDataUrl(imageData.dataUrl) || 'png';
+            const filename = `floor-image-${timestamp}.${extension}`;
+            const targetPath = `${floorDir}/${filename}`;
             
-            // Copy file using Tauri command
-            await this.invoke('copy_file', { 
-                src: imageData.path, 
-                dst: targetPath 
+            // Write the image data directly from the base64 dataUrl
+            // This works for all platforms (desktop, Android content URIs, document IDs, etc.)
+            const base64Data = imageData.dataUrl.split(',')[1]; // Remove data:image/xxx;base64, prefix
+            await this.invoke('write_file_base64', { 
+                filePath: targetPath,
+                b64: base64Data
             });
 
-            console.log('Copied image to:', targetPath);
+            console.log('Saved image to:', targetPath);
             
-            return imageData.filename;
+            return filename;
 
         } catch (error) {
             console.error('Failed to copy image:', error);
-            throw new Error('Failed to copy image file: ' + error.message);
+            throw new Error('Failed to copy image file: ' + (error.message || error));
         }
+    }
+
+    /**
+     * Get file extension from data URL
+     */
+    getExtensionFromDataUrl(dataUrl) {
+        const match = dataUrl.match(/data:image\/(\w+);/);
+        return match ? match[1] : null;
     }
 
     /**

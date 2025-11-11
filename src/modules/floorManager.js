@@ -360,8 +360,8 @@ export class FloorManager {
         let offsetX = 0, offsetY = 0;
         let isFirstMove = false;
         
-        deviceEl.addEventListener('mousedown', (e) => {
-            if (!this.homeMap.editMode) return;
+        const handleDragStart = (clientX, clientY) => {
+            if (!this.homeMap.editMode) return false;
             
             isDragging = true;
             isFirstMove = true;
@@ -374,14 +374,29 @@ export class FloorManager {
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             
-            // Calculate offset from cursor to widget center
-            offsetX = e.clientX - centerX;
-            offsetY = e.clientY - centerY;
+            // Calculate offset from cursor/touch to widget center
+            offsetX = clientX - centerX;
+            offsetY = clientY - centerY;
             
-            e.preventDefault();
+            return true;
+        };
+        
+        deviceEl.addEventListener('mousedown', (e) => {
+            if (handleDragStart(e.clientX, e.clientY)) {
+                e.preventDefault();
+            }
         });
         
-        document.addEventListener('mousemove', (e) => {
+        deviceEl.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                const touch = e.touches[0];
+                if (handleDragStart(touch.clientX, touch.clientY)) {
+                    e.preventDefault();
+                }
+            }
+        }, { passive: false });
+        
+        const handleDragMove = (clientX, clientY, shiftKey = false) => {
             if (!isDragging || !this.homeMap.editMode) return;
             
             // Get current zoom level
@@ -399,14 +414,14 @@ export class FloorManager {
                 const centerX = rect.left + rect.width / 2;
                 const centerY = rect.top + rect.height / 2;
                 
-                // Recalculate offset from current cursor to current rendered center
-                offsetX = e.clientX - centerX;
-                offsetY = e.clientY - centerY;
+                // Recalculate offset from current cursor/touch to current rendered center
+                offsetX = clientX - centerX;
+                offsetY = clientY - centerY;
             }
             
             // Calculate widget center position in viewport coordinates
-            let centerX = e.clientX - offsetX;
-            let centerY = e.clientY - offsetY;
+            let centerX = clientX - offsetX;
+            let centerY = clientY - offsetY;
             
             // Clamp to image bounds (in viewport coordinates, which are scaled)
             centerX = Math.max(imgRect.left, Math.min(centerX, imgRect.left + imgRect.width));
@@ -418,7 +433,7 @@ export class FloorManager {
             let y = (centerY - containerRect.top) / scale;
             
             // Apply grid snapping if shift key is held
-            if (e.shiftKey) {
+            if (shiftKey) {
                 x = Math.round(x / 5) * 5;
                 y = Math.round(y / 5) * 5;
             }
@@ -426,9 +441,21 @@ export class FloorManager {
             // Update position - the widget's center will be at this position due to transform
             deviceEl.style.left = `${x}px`;
             deviceEl.style.top = `${y}px`;
+        };
+        
+        document.addEventListener('mousemove', (e) => {
+            handleDragMove(e.clientX, e.clientY, e.shiftKey);
         });
         
-        document.addEventListener('mouseup', async (e) => {
+        document.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isDragging) {
+                const touch = e.touches[0];
+                handleDragMove(touch.clientX, touch.clientY);
+                e.preventDefault(); // Only prevent when actually dragging
+            }
+        }, { passive: false });
+        
+        const handleDragEnd = async (clientX, clientY) => {
             if (!isDragging) return;
             
             isDragging = false;
@@ -460,9 +487,9 @@ export class FloorManager {
                     imageOffsetY = (imgRect.height - renderedHeight) / 2;
                 }
                 
-                // Cursor position relative to img element (in scaled coordinates)
-                let x = e.clientX - imgRect.left;
-                let y = e.clientY - imgRect.top;
+                // Cursor/touch position relative to img element (in scaled coordinates)
+                let x = clientX - imgRect.left;
+                let y = clientY - imgRect.top;
                 
                 // Subtract the image offset to get position within the actual rendered image
                 x = x - imageOffsetX;
@@ -480,10 +507,21 @@ export class FloorManager {
                 const newPosition = { x: Math.round(naturalX), y: Math.round(naturalY) };
                 this.homeMap.updateDevicePosition(device, this.homeMap.currentFloor, newPosition);
                 
-                console.log(`Device ${device.id} SAVED: cursor=(${e.clientX}, ${e.clientY}), renderedImage=${renderedWidth.toFixed(1)}x${renderedHeight.toFixed(1)}, imageOffset=(${imageOffsetX.toFixed(1)}, ${imageOffsetY.toFixed(1)}), inImage=(${x.toFixed(1)}, ${y.toFixed(1)}), natural=(${newPosition.x}, ${newPosition.y})`);
+                console.log(`Device ${device.id} SAVED: cursor=(${clientX}, ${clientY}), renderedImage=${renderedWidth.toFixed(1)}x${renderedHeight.toFixed(1)}, imageOffset=(${imageOffsetX.toFixed(1)}, ${imageOffsetY.toFixed(1)}), inImage=(${x.toFixed(1)}, ${y.toFixed(1)}), natural=(${newPosition.x}, ${newPosition.y})`);
                 
                 // Save config
                 await this.homeMap.hc3ApiManager.saveConfig();
+            }
+        };
+        
+        document.addEventListener('mouseup', async (e) => {
+            await handleDragEnd(e.clientX, e.clientY);
+        });
+        
+        document.addEventListener('touchend', async (e) => {
+            if (e.changedTouches.length === 1) {
+                const touch = e.changedTouches[0];
+                await handleDragEnd(touch.clientX, touch.clientY);
             }
         });
     }

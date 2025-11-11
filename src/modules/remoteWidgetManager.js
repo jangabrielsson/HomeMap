@@ -519,6 +519,11 @@ export class RemoteWidgetManager {
         if (changes.state) {
             instance.state = changes.state;
         }
+
+        // Update UI elements if dialog is open
+        if (changes.ui && changes.ui.elements) {
+            this.updateUIElements(instanceId, changes.ui.elements);
+        }
     }
 
     async updateWidgetIcon(iconImg, iconSetName) {
@@ -529,12 +534,101 @@ export class RemoteWidgetManager {
         }
     }
 
+    updateUIElements(instanceId, elementUpdates) {
+        const dialogInfo = this.activeUIDialogs?.get(instanceId);
+        if (!dialogInfo) return; // Dialog not open
+
+        const { container } = dialogInfo;
+
+        elementUpdates.forEach(update => {
+            const elementDiv = container.querySelector(`[data-element-id="${update.id}"]`);
+            if (!elementDiv) return;
+
+            // Update based on element type
+            switch (update.type || this.getElementType(elementDiv)) {
+                case 'switch':
+                    if (update.value !== undefined) {
+                        const checkbox = elementDiv.querySelector('input[type="checkbox"]');
+                        const slider = elementDiv.querySelector('.widget-ui-switch span');
+                        const knob = slider.querySelector('span');
+                        if (checkbox) {
+                            checkbox.checked = update.value;
+                            slider.style.backgroundColor = update.value ? '#4CAF50' : '#ccc';
+                            knob.style.left = update.value ? '29px' : '3px';
+                        }
+                    }
+                    break;
+
+                case 'slider':
+                    if (update.value !== undefined) {
+                        const rangeInput = elementDiv.querySelector('input[type="range"]');
+                        const valueDisplay = elementDiv.querySelector('.slider-value');
+                        if (rangeInput) {
+                            rangeInput.value = update.value;
+                            if (valueDisplay) {
+                                const unit = rangeInput.dataset.unit || '';
+                                valueDisplay.textContent = update.value + unit;
+                            }
+                        }
+                    }
+                    break;
+
+                case 'label':
+                    if (update.value !== undefined) {
+                        const valueSpan = elementDiv.querySelector('span:last-child');
+                        if (valueSpan) {
+                            valueSpan.textContent = this.escapeHtml(update.value);
+                            if (update.color) {
+                                valueSpan.style.color = update.color;
+                            }
+                        }
+                    }
+                    break;
+
+                case 'input':
+                    if (update.value !== undefined) {
+                        const input = elementDiv.querySelector('input[type="text"]');
+                        if (input) {
+                            input.value = update.value;
+                        }
+                    }
+                    break;
+
+                case 'button':
+                    if (update.label !== undefined) {
+                        const button = elementDiv.querySelector('button');
+                        if (button) {
+                            button.textContent = (update.icon ? update.icon + ' ' : '') + this.escapeHtml(update.label);
+                        }
+                    }
+                    if (update.style !== undefined) {
+                        const button = elementDiv.querySelector('button');
+                        if (button) {
+                            button.style.background = update.style === 'primary' ? '#4CAF50' : 
+                                                      update.style === 'danger' ? '#e74c3c' : '#555';
+                        }
+                    }
+                    break;
+            }
+        });
+    }
+
+    getElementType(elementDiv) {
+        // Try to detect element type from DOM structure
+        if (elementDiv.querySelector('button')) return 'button';
+        if (elementDiv.querySelector('.widget-ui-switch')) return 'switch';
+        if (elementDiv.querySelector('input[type="range"]')) return 'slider';
+        if (elementDiv.querySelector('input[type="text"]')) return 'input';
+        return 'label';
+    }
+
     updateWidgetPalette() {
         if (!this.homeMap.editMode) return;
 
         // Get or create remote widgets section in palette
         const palette = document.getElementById('widget-list');
-        if (!palette) return;
+        const widgetPalette = document.getElementById('widgetPalette');
+        if (!palette || !widgetPalette) return;
 
         // Remove old remote widgets section
         const oldSection = palette.querySelector('.remote-widgets-section');
@@ -546,32 +640,69 @@ export class RemoteWidgetManager {
         if (this.remoteWidgets.size > 0) {
             const section = this.createRemoteWidgetsSection();
             palette.appendChild(section);
+            // Show the palette when widgets are available
+            widgetPalette.style.display = 'flex';
+        } else {
+            // Hide the palette when no widgets are available
+            widgetPalette.style.display = 'none';
+        }
+        
+        // Reposition devices after palette visibility changes
+        if (this.homeMap.floorManager) {
+            this.homeMap.floorManager.repositionAllDevices();
         }
     }
 
     createRemoteWidgetsSection() {
         const section = document.createElement('div');
         section.className = 'remote-widgets-section';
-        section.innerHTML = '<h3>🔌 Remote Widgets (QuickApps)</h3>';
+        section.innerHTML = '<h3>🔌 QuickApps</h3>';
 
         this.remoteWidgets.forEach((clientData, clientId) => {
             const qaGroup = document.createElement('div');
             qaGroup.className = 'remote-widget-group';
-            qaGroup.innerHTML = `
-                <div class="qa-header">
-                    <strong>${clientData.qaName}</strong>
-                    <span class="widget-count">${clientData.widgets.length} widgets</span>
+            
+            // Create collapsible header
+            const header = document.createElement('div');
+            header.className = 'qa-header';
+            header.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 8px 12px;
+                background: #3d3d3d;
+                border-radius: 4px;
+                cursor: pointer;
+                user-select: none;
+                margin-bottom: 8px;
+            `;
+            
+            header.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="collapse-icon" style="font-size: 12px; transition: transform 0.2s;">▼</span>
+                    <strong>${this.escapeHtml(clientData.qaName)}</strong>
                 </div>
+                <span class="widget-count" style="color: #aaa; font-size: 12px;">${clientData.widgets.length} widgets</span>
             `;
 
             const widgetList = document.createElement('div');
             widgetList.className = 'remote-widget-list';
+            widgetList.style.display = 'block'; // Expanded by default
 
             clientData.widgets.forEach(widget => {
                 const widgetItem = this.createWidgetPaletteItem(widget);
                 widgetList.appendChild(widgetItem);
             });
 
+            // Toggle collapse on header click
+            header.addEventListener('click', () => {
+                const isCollapsed = widgetList.style.display === 'none';
+                widgetList.style.display = isCollapsed ? 'block' : 'none';
+                const icon = header.querySelector('.collapse-icon');
+                icon.style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+            });
+
+            qaGroup.appendChild(header);
             qaGroup.appendChild(widgetList);
             section.appendChild(qaGroup);
         });
@@ -987,7 +1118,13 @@ export class RemoteWidgetManager {
 
         console.log(`Widget clicked: ${instance.widgetDef.name}`);
 
-        // Send event to QuickApp
+        // If widget has UI definition, show interactive dialog
+        if (instance.widgetDef.ui) {
+            this.showWidgetUIDialog(instanceId);
+            return;
+        }
+
+        // Otherwise, send simple click event to QuickApp
         try {
             await this.homeMap.invoke('ws_send_to_client', {
                 clientId: instance.clientId,
@@ -1354,6 +1491,240 @@ export class RemoteWidgetManager {
         }
         if (menuRect.bottom > window.innerHeight) {
             menu.style.top = `${window.innerHeight - menuRect.height - 10}px`;
+        }
+    }
+
+    async showWidgetUIDialog(instanceId) {
+        const instance = this.widgetInstances.get(instanceId);
+        if (!instance || !instance.widgetDef.ui) return;
+
+        const ui = instance.widgetDef.ui;
+        
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        `;
+
+        // Create dialog
+        const dialog = document.createElement('div');
+        dialog.className = 'widget-ui-dialog';
+        dialog.style.cssText = `
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 350px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        `;
+
+        // Dialog title
+        const title = ui.title || instance.widgetDef.name;
+        dialog.innerHTML = `
+            <h3 style="margin: 0 0 20px 0; color: #e0e0e0; font-size: 18px;">
+                ${this.escapeHtml(title)}
+            </h3>
+            <div id="ui-elements-container"></div>
+        `;
+
+        const container = dialog.querySelector('#ui-elements-container');
+
+        // Render UI elements
+        for (const element of ui.elements) {
+            const elementDiv = await this.renderUIElement(element, instanceId);
+            container.appendChild(elementDiv);
+        }
+
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+
+        // Store reference for updates
+        this.activeUIDialogs = this.activeUIDialogs || new Map();
+        this.activeUIDialogs.set(instanceId, { overlay, dialog, container });
+    }
+
+    async renderUIElement(element, instanceId) {
+        const instance = this.widgetInstances.get(instanceId);
+        const div = document.createElement('div');
+        div.style.cssText = 'margin-bottom: 16px;';
+        div.dataset.elementId = element.id;
+
+        switch (element.type) {
+            case 'button':
+                div.innerHTML = `
+                    <button class="widget-ui-button" style="
+                        width: 100%;
+                        padding: 12px;
+                        background: ${element.style === 'primary' ? '#4CAF50' : element.style === 'danger' ? '#e74c3c' : '#555'};
+                        border: none;
+                        border-radius: 6px;
+                        color: white;
+                        font-size: 14px;
+                        cursor: pointer;
+                        transition: opacity 0.2s;
+                    " onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        ${element.icon ? element.icon + ' ' : ''}${this.escapeHtml(element.label)}
+                    </button>
+                `;
+                div.querySelector('button').addEventListener('click', () => {
+                    this.sendUIAction(instanceId, element.id, 'click', null);
+                });
+                break;
+
+            case 'switch':
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <label style="color: #e0e0e0; font-size: 14px;">${this.escapeHtml(element.label)}</label>
+                        <label class="widget-ui-switch" style="position: relative; display: inline-block; width: 50px; height: 24px;">
+                            <input type="checkbox" ${element.value ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;">
+                            <span style="
+                                position: absolute;
+                                cursor: pointer;
+                                top: 0;
+                                left: 0;
+                                right: 0;
+                                bottom: 0;
+                                background-color: ${element.value ? '#4CAF50' : '#ccc'};
+                                transition: 0.3s;
+                                border-radius: 24px;
+                            ">
+                                <span style="
+                                    position: absolute;
+                                    content: '';
+                                    height: 18px;
+                                    width: 18px;
+                                    left: ${element.value ? '29px' : '3px'};
+                                    bottom: 3px;
+                                    background-color: white;
+                                    transition: 0.3s;
+                                    border-radius: 50%;
+                                "></span>
+                            </span>
+                        </label>
+                    </div>
+                `;
+                const checkbox = div.querySelector('input[type="checkbox"]');
+                const slider = div.querySelector('.widget-ui-switch span');
+                const knob = slider.querySelector('span');
+                checkbox.addEventListener('change', (e) => {
+                    const checked = e.target.checked;
+                    slider.style.backgroundColor = checked ? '#4CAF50' : '#ccc';
+                    knob.style.left = checked ? '29px' : '3px';
+                    this.sendUIAction(instanceId, element.id, 'toggle', checked);
+                });
+                break;
+
+            case 'slider':
+                const currentValue = element.value !== undefined ? element.value : ((element.min || 0) + (element.max || 100)) / 2;
+                div.innerHTML = `
+                    <label style="display: block; margin-bottom: 8px; color: #e0e0e0; font-size: 14px;">
+                        ${this.escapeHtml(element.label)}
+                    </label>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <input type="range" 
+                            min="${element.min || 0}" 
+                            max="${element.max || 100}" 
+                            step="${element.step || 1}"
+                            value="${currentValue}"
+                            style="flex: 1; height: 6px; border-radius: 3px; background: #555; outline: none;">
+                        <span class="slider-value" style="color: #e0e0e0; font-size: 14px; min-width: 50px; text-align: right;">
+                            ${currentValue}${element.unit || ''}
+                        </span>
+                    </div>
+                `;
+                const slider2 = div.querySelector('input[type="range"]');
+                const valueDisplay = div.querySelector('.slider-value');
+                slider2.addEventListener('input', (e) => {
+                    const value = parseFloat(e.target.value);
+                    valueDisplay.textContent = value + (element.unit || '');
+                });
+                slider2.addEventListener('change', (e) => {
+                    const value = parseFloat(e.target.value);
+                    this.sendUIAction(instanceId, element.id, 'change', value);
+                });
+                break;
+
+            case 'label':
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                        <span style="color: #aaa; font-size: 14px;">${this.escapeHtml(element.label)}</span>
+                        <span style="color: ${element.color || '#e0e0e0'}; font-size: 14px; font-weight: 500;">
+                            ${this.escapeHtml(element.value || '')}
+                        </span>
+                    </div>
+                `;
+                break;
+
+            case 'input':
+                div.innerHTML = `
+                    <label style="display: block; margin-bottom: 5px; color: #e0e0e0; font-size: 14px;">
+                        ${this.escapeHtml(element.label)}
+                    </label>
+                    <input type="text" 
+                        value="${this.escapeHtml(element.value || '')}"
+                        placeholder="${this.escapeHtml(element.placeholder || '')}"
+                        style="width: 100%; padding: 8px; background: #1e1e1e; border: 1px solid #444; 
+                        border-radius: 4px; color: #e0e0e0; font-size: 14px;">
+                `;
+                const input = div.querySelector('input[type="text"]');
+                input.addEventListener('change', (e) => {
+                    this.sendUIAction(instanceId, element.id, 'change', e.target.value);
+                });
+                break;
+
+            default:
+                console.warn(`Unknown UI element type: ${element.type}`);
+        }
+
+        return div;
+    }
+
+    async sendUIAction(instanceId, elementId, action, value) {
+        const instance = this.widgetInstances.get(instanceId);
+        if (!instance) return;
+
+        console.log(`UI action: ${elementId} ${action} = ${value}`);
+
+        try {
+            await this.homeMap.invoke('ws_send_to_client', {
+                clientId: instance.clientId,
+                message: {
+                    type: 'widget-event',
+                    widgetId: instance.widgetDef.id,
+                    event: 'ui-action',
+                    data: {
+                        elementId: elementId,
+                        action: action,
+                        value: value,
+                        floor: instance.floor,
+                        timestamp: Date.now(),
+                        parameters: instance.parameters || {}
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Failed to send UI action:', error);
+            this.showNotification('Widget disconnected', 'error');
         }
     }
 
@@ -1825,5 +2196,12 @@ export class RemoteWidgetManager {
             });
         });
         return info;
+    }
+
+    escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }

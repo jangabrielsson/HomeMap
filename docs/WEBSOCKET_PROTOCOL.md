@@ -78,6 +78,7 @@ Register one or more widgets when connecting.
   - `name`: Widget name for palette
   - `iconSet`: Initial icon set name (from HomeMap's icon library)
   - `label`: Text label displayed under icon
+  - `ui`: Optional interactive UI definition (see UI Definitions section below)
   - `metadata`: Optional custom data
 
 **Important - Widget UIDs:**
@@ -101,7 +102,6 @@ widgets: [
   { id: "widget-" + Date.now(), name: "Living Room" }  // Changes every reconnect!
 ]
 ```
-  - `metadata`: Optional custom data
 
 **Response:** HomeMap emits `ws-register-widgets` event internally
 
@@ -230,6 +230,240 @@ Optional keepalive message.
 ```
 
 **Response:** None (prevents connection timeout)
+
+---
+
+## UI Definitions
+
+Widgets can optionally include interactive UI definitions that display when the user clicks the widget. This allows creating custom control panels with buttons, sliders, switches, and more.
+
+### UI Structure
+
+Add a `ui` field to your widget definition:
+
+```json
+{
+  "id": "dimmer-control",
+  "name": "Living Room Dimmer",
+  "iconSet": "lightdim",
+  "label": "Dimmer",
+  "ui": {
+    "type": "dialog",
+    "title": "Living Room Dimmer",
+    "elements": [
+      {
+        "id": "power",
+        "type": "switch",
+        "label": "Power",
+        "value": true
+      },
+      {
+        "id": "brightness",
+        "type": "slider",
+        "label": "Brightness",
+        "min": 0,
+        "max": 100,
+        "value": 67,
+        "unit": "%"
+      },
+      {
+        "id": "preset-day",
+        "type": "button",
+        "label": "Day Mode",
+        "icon": "☀️"
+      },
+      {
+        "id": "preset-night",
+        "type": "button",
+        "label": "Night Mode",
+        "icon": "🌙"
+      }
+    ]
+  }
+}
+```
+
+### UI Element Types
+
+#### **button**
+A clickable button.
+```json
+{
+  "id": "activate",
+  "type": "button",
+  "label": "Activate",
+  "icon": "▶️",
+  "style": "primary"
+}
+```
+- `label`: Button text (required)
+- `icon`: Optional emoji/icon
+- `style`: "primary", "secondary", or "danger" (default: "secondary")
+
+#### **switch**
+On/off toggle switch.
+```json
+{
+  "id": "power",
+  "type": "switch",
+  "label": "Power",
+  "value": true
+}
+```
+- `label`: Label text (required)
+- `value`: Current state (boolean)
+
+#### **slider**
+Value slider with optional unit display.
+```json
+{
+  "id": "temperature",
+  "type": "slider",
+  "label": "Target Temperature",
+  "min": 16,
+  "max": 30,
+  "step": 0.5,
+  "value": 22,
+  "unit": "°C"
+}
+```
+- `label`: Label text (required)
+- `min`: Minimum value (default: 0)
+- `max`: Maximum value (default: 100)
+- `step`: Step increment (default: 1)
+- `value`: Current value
+- `unit`: Display unit (e.g., "%", "°C", "lux")
+
+#### **label**
+Read-only text display.
+```json
+{
+  "id": "status",
+  "type": "label",
+  "label": "Current Status",
+  "value": "Active",
+  "color": "#4CAF50"
+}
+```
+- `label`: Label text (required)
+- `value`: Display value
+- `color`: Text color (CSS color)
+
+#### **input**
+Text input field.
+```json
+{
+  "id": "name",
+  "type": "input",
+  "label": "Profile Name",
+  "value": "Away",
+  "placeholder": "Enter name..."
+}
+```
+- `label`: Label text (required)
+- `value`: Current text value
+- `placeholder`: Placeholder text
+
+### UI Events
+
+When a user interacts with a UI element, HomeMap sends a `widget-event` with `event: "ui-action"`:
+
+```json
+{
+  "type": "widget-event",
+  "widgetId": "dimmer-control",
+  "event": "ui-action",
+  "data": {
+    "elementId": "brightness",
+    "action": "change",
+    "value": 80,
+    "floor": "floor-1",
+    "timestamp": 1699300800000,
+    "parameters": {}
+  }
+}
+```
+
+**Actions by Element Type:**
+- `button`: action = "click"
+- `switch`: action = "toggle", value = true/false
+- `slider`: action = "change", value = number
+- `input`: action = "change", value = string
+
+### Updating UI Values
+
+To update UI element values (e.g., when device state changes), include the `ui` object in your `widget-update`:
+
+```json
+{
+  "type": "widget-update",
+  "widgetId": "dimmer-control",
+  "changes": {
+    "iconSet": "lightdim-on",
+    "ui": {
+      "elements": [
+        {
+          "id": "power",
+          "value": true
+        },
+        {
+          "id": "brightness",
+          "value": 85
+        }
+      ]
+    }
+  }
+}
+```
+
+Only include elements you want to update. HomeMap will merge the changes with existing UI state.
+
+### Example: Complete Thermostat Widget
+
+```json
+{
+  "id": "thermostat",
+  "name": "Living Room Thermostat",
+  "iconSet": "temperature",
+  "label": "22°C",
+  "ui": {
+    "type": "dialog",
+    "title": "Thermostat Control",
+    "elements": [
+      {
+        "id": "current",
+        "type": "label",
+        "label": "Current Temperature",
+        "value": "22.5°C",
+        "color": "#4CAF50"
+      },
+      {
+        "id": "target",
+        "type": "slider",
+        "label": "Target Temperature",
+        "min": 16,
+        "max": 30,
+        "step": 0.5,
+        "value": 22,
+        "unit": "°C"
+      },
+      {
+        "id": "mode",
+        "type": "button",
+        "label": "Heat",
+        "icon": "🔥"
+      },
+      {
+        "id": "boost",
+        "type": "button",
+        "label": "Boost Mode",
+        "icon": "⚡",
+        "style": "primary"
+      }
+    ]
+  }
+}
+```
 
 ---
 
