@@ -96,10 +96,10 @@ jobs:
           sdkmanager --install "ndk;29.0.14206865"
           sdkmanager --install "build-tools;34.0.0"
           sdkmanager --install "platforms;android-34"
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_SDK_ROOT/ndk/29.0.14206865" >> $GITHUB_ENV
-          echo "Set ANDROID_HOME to: $ANDROID_SDK_ROOT"
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_NDK_ROOT=/usr/local/lib/android/sdk/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "NDK_HOME=/usr/local/lib/android/sdk/ndk/29.0.14206865" >> $GITHUB_ENV
+          echo "Set ANDROID_HOME to: /usr/local/lib/android/sdk"
           
       - name: Verify Android Environment
         run: |
