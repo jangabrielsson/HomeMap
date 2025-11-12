@@ -171,19 +171,6 @@ jobs:
           chmod +x scripts/generate-asset-manifest.sh
           ./scripts/generate-asset-manifest.sh
           
-      - name: Setup Android signing
-        run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/app/homemap-release.keystore
-          
-      - name: Create keystore.properties
-        run: |
-          cat > src-tauri/gen/android/keystore.properties << EOF
-          storeFile=app/homemap-release.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
-          
       - name: Cache Tauri CLI
         uses: actions/cache@v4
         with:
@@ -202,6 +189,19 @@ jobs:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
+          
+      - name: Setup Android signing
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/app/homemap-release.keystore
+          
+      - name: Create keystore.properties
+        run: |
+          cat > src-tauri/gen/android/keystore.properties << EOF
+          storeFile=app/homemap-release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
           
       - name: Build Android APK
         run: cargo tauri android build --target aarch64 --verbose
