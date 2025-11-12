@@ -203,38 +203,69 @@ jobs:
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
           
-          # Patch build.gradle.kts to add signing config
-          BUILD_GRADLE="src-tauri/gen/android/app/build.gradle.kts"
+          # Patch build.gradle.kts with Python for precise injection
+          python3 << 'PYTHON_SCRIPT'
+          import re
           
-          # Add keystore properties loading after tauriProperties
-          sed -i '/val tauriProperties = Properties/a\
-          \
-          val keystoreProperties = Properties().apply {\
-              val propFile = file("../keystore.properties")\
-              if (propFile.exists()) {\
-                  propFile.inputStream().use { load(it) }\
-              }\
-          }' "$BUILD_GRADLE"
+          gradle_file = "src-tauri/gen/android/app/build.gradle.kts"
           
-          # Add signingConfigs block after defaultConfig
-          sed -i '/defaultConfig {/,/}/a\
-          \
-          signingConfigs {\
-              create("release") {\
-                  if (keystoreProperties.isNotEmpty()) {\
-                      storeFile = file(keystoreProperties.getProperty("storeFile"))\
-                      storePassword = keystoreProperties.getProperty("storePassword")\
-                      keyAlias = keystoreProperties.getProperty("keyAlias")\
-                      keyPassword = keystoreProperties.getProperty("keyPassword")\
-                  }\
-              }\
-          }' "$BUILD_GRADLE"
+          with open(gradle_file, 'r') as f:
+              content = f.read()
           
-          # Add signingConfig to release buildType
-          sed -i '/getByName("release") {/a\
-              signingConfig = signingConfigs.getByName("release")' "$BUILD_GRADLE"
+          # Add keystoreProperties after tauriProperties (only once)
+          keystore_props = '''
+          val keystoreProperties = Properties().apply {
+              val propFile = file("../keystore.properties")
+              if (propFile.exists()) {
+                  propFile.inputStream().use { load(it) }
+              }
+          }'''
           
-          echo "✓ Signing configuration added to build.gradle.kts"
+          if 'keystoreProperties' not in content:
+              content = re.sub(
+                  r'(val tauriProperties = Properties\(\)\.apply \{[^}]+\})',
+                  r'\1' + keystore_props,
+                  content,
+                  count=1
+              )
+          
+          # Add signingConfigs block after defaultConfig closing brace (only once)
+          signing_configs = '''
+              
+              signingConfigs {
+                  create("release") {
+                      if (keystoreProperties.isNotEmpty()) {
+                          storeFile = file(keystoreProperties.getProperty("storeFile"))
+                          storePassword = keystoreProperties.getProperty("storePassword")
+                          keyAlias = keystoreProperties.getProperty("keyAlias")
+                          keyPassword = keystoreProperties.getProperty("keyPassword")
+                      }
+                  }
+              }'''
+          
+          if 'signingConfigs' not in content:
+              # Find the end of defaultConfig block
+              content = re.sub(
+                  r'(    defaultConfig \{(?:[^{}]|\{[^}]*\})*\}\n)',
+                  r'\1' + signing_configs + '\n',
+                  content,
+                  count=1
+              )
+          
+          # Add signingConfig to release buildType (only once)
+          if 'signingConfig = signingConfigs' not in content:
+              content = re.sub(
+                  r'(        getByName\("release"\) \{\n)',
+                  r'\1            signingConfig = signingConfigs.getByName("release")\n',
+                  content,
+                  count=1
+              )
+          
+          with open(gradle_file, 'w') as f:
+              f.write(content)
+          
+          print("✓ Signing configuration added to build.gradle.kts")
+          PYTHON_SCRIPT
           
       - name: Build Android APK
         run: cargo tauri android build --target aarch64 --verbose
