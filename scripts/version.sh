@@ -16,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║ HC3 QuickApp Manager - Version Manager║${NC}"
+echo -e "${BLUE}║ HC3 HomeMap - Home visualization       ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
@@ -113,6 +113,7 @@ echo -e "${YELLOW}📦 GitHub Actions will now build the release:${NC}"
 echo -e "   • macOS (Apple Silicon)"
 echo -e "   • macOS (Intel)"
 echo -e "   • Windows"
+echo -e "   • Android (Arm64)"
 echo ""
 echo -e "Check progress at: ${BLUE}https://github.com/$(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\.git/\1/')/actions${NC}"
 echo ""
