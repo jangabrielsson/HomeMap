@@ -77,9 +77,10 @@ jobs:
             - Run the installer
             
             **Android:**
-            - Download `app-universal-release.apk`
+            - Download `app-arm64-release.apk` (ARM64/aarch64 devices only)
             - Enable "Install from unknown sources" in Android settings
             - Install the APK file
+            - Note: Requires a 64-bit ARM processor (most modern Android devices)
             
             ### Auto-Updates
             
@@ -111,7 +112,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64-linux-android
           
       - name: Cache Rust dependencies
         uses: actions/cache@v4
@@ -190,7 +191,7 @@ jobs:
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
           
       - name: Build Android APK
-        run: cargo tauri android build --release --verbose
+        run: cargo tauri android build --release --target aarch64 --verbose
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
@@ -198,15 +199,15 @@ jobs:
           
       - name: Verify APK creation
         run: |
-          if [ ! -f "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk" ]; then
+          if [ ! -f "src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk" ]; then
             echo "❌ APK not found at expected location"
             find src-tauri/gen/android -name "*.apk" -type f
             exit 1
           fi
-          ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/
+          ls -la src-tauri/gen/android/app/build/outputs/apk/arm64/release/
           
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          files: src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk
           tag_name: ${{ github.ref_name }}
