@@ -171,6 +171,19 @@ jobs:
           chmod +x scripts/generate-asset-manifest.sh
           ./scripts/generate-asset-manifest.sh
           
+      - name: Setup Android signing
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/app/homemap-release.keystore
+          
+      - name: Create keystore.properties
+        run: |
+          cat > src-tauri/gen/android/keystore.properties << EOF
+          storeFile=app/homemap-release.keystore
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+          
       - name: Cache Tauri CLI
         uses: actions/cache@v4
         with:
@@ -202,14 +215,14 @@ jobs:
           echo "Searching for built APK files..."
           find src-tauri/gen/android -name "*.apk" -type f
           echo ""
-          if [ -f "src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk" ]; then
-            echo "✓ Found ARM64 APK (unsigned)"
+          if [ -f "src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk" ]; then
+            echo "✓ Found ARM64 APK (signed)"
             ls -lh src-tauri/gen/android/app/build/outputs/apk/arm64/release/
-          elif [ -f "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk" ]; then
-            echo "✓ Found universal APK (unsigned)"
+          elif [ -f "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk" ]; then
+            echo "✓ Found universal APK (signed)"
             ls -lh src-tauri/gen/android/app/build/outputs/apk/universal/release/
           else
-            echo "❌ No APK found at expected locations"
+            echo "❌ No signed APK found at expected locations"
             exit 1
           fi
           
@@ -217,7 +230,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+            src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
           tag_name: ${{ github.ref_name }}
           fail_on_unmatched_files: false

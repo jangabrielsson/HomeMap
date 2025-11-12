@@ -278,6 +278,15 @@ cargo tauri dev
 cargo tauri build
 ```
 
+### Android APK Signing
+
+For production Android releases, you need to set up APK signing. See [docs/ANDROID_SIGNING.md](docs/ANDROID_SIGNING.md) for detailed instructions.
+
+Quick summary:
+1. Generate keystore: `keytool -genkey -v -keystore homemap-release.keystore -alias homemap -keyalg RSA -keysize 2048 -validity 10000`
+2. Add GitHub secrets: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+3. Push a release tag - GitHub Actions will build and sign the APK
+
 ## Documentation
 
 Comprehensive guides are available in the [`docs/`](docs/) directory:
