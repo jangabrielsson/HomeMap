@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     tags-ignore:
-      - 'v*'  # Don't run CI on version tags (release workflow handles it)
+      - '**'  # Don't run CI on any tags (release workflow handles releases)
   pull_request:
     branches: [ main ]
 

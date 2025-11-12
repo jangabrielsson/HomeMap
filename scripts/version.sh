@@ -98,9 +98,8 @@ echo -e "${GREEN}✓${NC} Created tag v${NEW_VERSION}"
 echo ""
 echo -e "${BLUE}Pushing to GitHub...${NC}"
 
-# Push commit and tags
-git push origin main
-git push origin "v${NEW_VERSION}"
+# Push commit and tag together (avoids triggering CI twice)
+git push origin main --tags
 
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
