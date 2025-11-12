@@ -191,7 +191,7 @@ jobs:
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
           
       - name: Build Android APK
-        run: cargo tauri android build --release --target aarch64 --verbose
+        run: cargo tauri android build --target aarch64 --verbose
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
