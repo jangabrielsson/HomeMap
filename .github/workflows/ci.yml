@@ -3,11 +3,17 @@ name: CI
 on:
   push:
     branches: [ main ]
+    tags-ignore:
+      - 'v*'  # Don't run CI on version tags (release workflow handles it)
   pull_request:
     branches: [ main ]
 
 jobs:
   desktop-test:
+    # Skip CI on version bump commits (release workflow will build)
+    if: |
+      github.event.head_commit.message && 
+      !startsWith(github.event.head_commit.message, 'chore: bump version')
     strategy:
       matrix:
         platform: [windows-latest, macos-latest]
@@ -45,6 +51,10 @@ jobs:
         run: cd src-tauri && cargo check
         
   android-test:
+    # Skip CI on version bump commits (release workflow will build)
+    if: |
+      github.event.head_commit.message && 
+      !startsWith(github.event.head_commit.message, 'chore: bump version')
     runs-on: ubuntu-latest
     
     steps:
