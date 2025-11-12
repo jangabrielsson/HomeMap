@@ -192,16 +192,49 @@ jobs:
           
       - name: Setup Android signing
         run: |
+          # Create keystore file
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/app/homemap-release.keystore
           
-      - name: Create keystore.properties
-        run: |
+          # Create keystore.properties
           cat > src-tauri/gen/android/keystore.properties << EOF
           storeFile=app/homemap-release.keystore
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
+          
+          # Patch build.gradle.kts to add signing config
+          BUILD_GRADLE="src-tauri/gen/android/app/build.gradle.kts"
+          
+          # Add keystore properties loading after tauriProperties
+          sed -i '/val tauriProperties = Properties/a\
+          \
+          val keystoreProperties = Properties().apply {\
+              val propFile = file("../keystore.properties")\
+              if (propFile.exists()) {\
+                  propFile.inputStream().use { load(it) }\
+              }\
+          }' "$BUILD_GRADLE"
+          
+          # Add signingConfigs block after defaultConfig
+          sed -i '/defaultConfig {/,/}/a\
+          \
+          signingConfigs {\
+              create("release") {\
+                  if (keystoreProperties.isNotEmpty()) {\
+                      storeFile = file(keystoreProperties.getProperty("storeFile"))\
+                      storePassword = keystoreProperties.getProperty("storePassword")\
+                      keyAlias = keystoreProperties.getProperty("keyAlias")\
+                      keyPassword = keystoreProperties.getProperty("keyPassword")\
+                  }\
+              }\
+          }' "$BUILD_GRADLE"
+          
+          # Add signingConfig to release buildType
+          sed -i '/getByName("release") {/a\
+              signingConfig = signingConfigs.getByName("release")' "$BUILD_GRADLE"
+          
+          echo "✓ Signing configuration added to build.gradle.kts"
           
       - name: Build Android APK
         run: cargo tauri android build --target aarch64 --verbose
