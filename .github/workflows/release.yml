@@ -192,12 +192,12 @@ jobs:
           
       - name: Setup Android signing
         run: |
-          # Create keystore file
+          # Create keystore file in the app directory
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/app/homemap-release.keystore
           
-          # Create keystore.properties
+          # Create keystore.properties in gen/android directory
           cat > src-tauri/gen/android/keystore.properties << EOF
-          storeFile=app/homemap-release.keystore
+          storeFile=homemap-release.keystore
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -254,11 +254,11 @@ jobs:
                   flags=re.DOTALL
               )
           
-          # Add signingConfig to release buildType (only once)
+          # Add conditional signingConfig to release buildType (only once)
           if 'signingConfig = signingConfigs' not in content:
               content = re.sub(
                   r'(        getByName\("release"\) \{\n)',
-                  r'\1            signingConfig = signingConfigs.getByName("release")\n',
+                  r'\1            if (keystoreProperties.isNotEmpty()) {\n                signingConfig = signingConfigs.getByName("release")\n            }\n',
                   content,
                   count=1
               )
