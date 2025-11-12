@@ -199,15 +199,25 @@ jobs:
           
       - name: Verify APK creation
         run: |
-          if [ ! -f "src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk" ]; then
-            echo "❌ APK not found at expected location"
-            find src-tauri/gen/android -name "*.apk" -type f
+          echo "Searching for built APK files..."
+          find src-tauri/gen/android -name "*.apk" -type f
+          echo ""
+          if [ -f "src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk" ]; then
+            echo "✓ Found ARM64 APK (unsigned)"
+            ls -lh src-tauri/gen/android/app/build/outputs/apk/arm64/release/
+          elif [ -f "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk" ]; then
+            echo "✓ Found universal APK (unsigned)"
+            ls -lh src-tauri/gen/android/app/build/outputs/apk/universal/release/
+          else
+            echo "❌ No APK found at expected locations"
             exit 1
           fi
-          ls -la src-tauri/gen/android/app/build/outputs/apk/arm64/release/
           
       - name: Upload APK to release
         uses: softprops/action-gh-release@v2
         with:
-          files: src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release-unsigned.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
           tag_name: ${{ github.ref_name }}
+          fail_on_unmatched_files: false
