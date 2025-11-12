@@ -212,24 +212,26 @@ jobs:
           with open(gradle_file, 'r') as f:
               content = f.read()
           
-          # Add keystoreProperties after tauriProperties (only once)
+          # Add keystoreProperties after tauriProperties closing brace (only once)
           keystore_props = '''
+          
           val keystoreProperties = Properties().apply {
-              val propFile = file("../keystore.properties")
-              if (propFile.exists()) {
-                  propFile.inputStream().use { load(it) }
+              val keystorePropFile = file("../keystore.properties")
+              if (keystorePropFile.exists()) {
+                  keystorePropFile.inputStream().use { load(it) }
               }
           }'''
           
           if 'keystoreProperties' not in content:
+              # Insert after the tauriProperties block ends
               content = re.sub(
-                  r'(val tauriProperties = Properties\(\)\.apply \{[^}]+\})',
-                  r'\1' + keystore_props,
+                  r'(val tauriProperties = Properties\(\)\.apply \{[^}]+\}\n)',
+                  r'\1' + keystore_props + '\n',
                   content,
                   count=1
               )
           
-          # Add signingConfigs block after defaultConfig closing brace (only once)
+          # Add signingConfigs block inside android { } after defaultConfig (only once)
           signing_configs = '''
               
               signingConfigs {
@@ -244,12 +246,13 @@ jobs:
               }'''
           
           if 'signingConfigs' not in content:
-              # Find the end of defaultConfig block
+              # Find defaultConfig block and add signing after it
               content = re.sub(
-                  r'(    defaultConfig \{(?:[^{}]|\{[^}]*\})*\}\n)',
-                  r'\1' + signing_configs + '\n',
+                  r'(    defaultConfig \{[^}]*\})\n',
+                  r'\1\n' + signing_configs + '\n',
                   content,
-                  count=1
+                  count=1,
+                  flags=re.DOTALL
               )
           
           # Add signingConfig to release buildType (only once)
