@@ -548,6 +548,18 @@ export class FloorManager {
         const floorView = document.getElementById(`floor-${floorId}`);
         if (floorView) {
             floorView.classList.add('active');
+            
+            // Reposition devices for the newly visible floor
+            // This is needed especially when switching floors in edit mode
+            const container = floorView.querySelector('.floor-image-container');
+            const img = container?.querySelector('.floor-image');
+            if (container && img && img.complete) {
+                this.repositionDevices(floorId, container, img);
+                // Also reposition remote widgets
+                if (this.homeMap.remoteWidgetManager) {
+                    this.homeMap.remoteWidgetManager.repositionRemoteWidgets(floorId, container, img);
+                }
+            }
         }
 
         // Update current floor

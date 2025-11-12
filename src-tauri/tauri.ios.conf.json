@@ -2,5 +2,10 @@
   "build": {
     "devUrl": null,
     "frontendDist": "../src"
+  },
+  "bundle": {
+    "iOS": {
+      "infoPlist": "./Info-additions.plist"
+    }
   }
 }

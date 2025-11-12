@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Allow opening documents in place (enables iCloud access) -->
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    
+    <!-- Enable file sharing -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    
+    <!-- Support document browser -->
+    <key>UISupportsDocumentBrowser</key>
+    <true/>
+    
+    <!-- Photo library access description -->
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>HomeMap needs access to your photo library to select floor plan images.</string>
+    
+    <!-- Declare supported image types -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Image</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.image</string>
+                <string>public.jpeg</string>
+                <string>public.png</string>
+                <string>public.heic</string>
+                <string>com.apple.photos-library</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

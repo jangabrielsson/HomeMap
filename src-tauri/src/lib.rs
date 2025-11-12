@@ -325,6 +325,10 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
 }
 
 fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
+    sync_builtin_resources_with_app(None, data_dir)
+}
+
+fn sync_builtin_resources_with_app(app: Option<&tauri::AppHandle>, data_dir: &PathBuf) -> Result<(), String> {
     // Check if we need to sync based on version
     let current_version = env!("CARGO_PKG_VERSION");
     let version_file = data_dir.join(".builtin-version");
@@ -346,15 +350,48 @@ fn sync_builtin_resources(data_dir: &PathBuf) -> Result<(), String> {
     }
     
     if should_sync {
-        if let Ok(template_dir) = find_template_directory() {
-            sync_builtin_resources_from_template(&template_dir, data_dir)?;
-            
+        // Try to find template directory
+        let mut found_template = false;
+        
+        // First, try using app handle to find bundled resources (works on all platforms including mobile)
+        if let Some(app_handle) = app {
+            if let Ok(resource_dir) = app_handle.path().resource_dir() {
+                println!("Resource directory from app handle: {:?}", resource_dir);
+                
+                // Try direct path to homemapdata.example
+                let template = resource_dir.join("homemapdata.example");
+                if template.exists() {
+                    println!("Found template at: {:?}", template);
+                    sync_builtin_resources_from_template(&template, data_dir)?;
+                    found_template = true;
+                } else {
+                    // Try _up_/homemapdata.example (Tauri mobile bundling pattern)
+                    let template_up = resource_dir.join("_up_").join("homemapdata.example");
+                    println!("Trying _up_ path: {:?}", template_up);
+                    if template_up.exists() {
+                        println!("Found template in _up_: {:?}", template_up);
+                        sync_builtin_resources_from_template(&template_up, data_dir)?;
+                        found_template = true;
+                    }
+                }
+            }
+        }
+        
+        // Fallback to find_template_directory if app handle didn't work
+        if !found_template {
+            if let Ok(template_dir) = find_template_directory() {
+                sync_builtin_resources_from_template(&template_dir, data_dir)?;
+                found_template = true;
+            } else {
+                println!("WARNING: Could not find template directory - widgets will not be available!");
+            }
+        }
+        
+        if found_template {
             // Update version file after successful sync
             fs::write(&version_file, current_version)
                 .map_err(|e| format!("Failed to write version file: {}", e))?;
             println!("Updated built-in version to {}", current_version);
-        } else {
-            println!("Skipping built-in resource sync - template not found");
         }
     }
     
@@ -660,6 +697,12 @@ fn get_data_path() -> Result<String, String> {
 #[tauri::command]
 fn get_app_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
+fn sync_resources(app: tauri::AppHandle) -> Result<(), String> {
+    let data_path = get_homemap_data_path()?;
+    sync_builtin_resources_with_app(Some(&app), &data_path)
 }
 
 #[tauri::command]
@@ -2186,6 +2229,7 @@ pub fn run() {
             get_homemap_config, 
             get_data_path,
             get_app_version,
+            sync_resources,
             read_image_as_base64,
             write_file_base64,
             write_file_as_text,

@@ -117,43 +117,116 @@ export class FloorManagementDialog {
                 console.log('Opening file dialog...');
                 console.log('this.dialog:', this.dialog);
                 
-                // Use Tauri file dialog to select image
-                const result = await this.dialog.open({
-                    multiple: false,
-                    filters: [{
-                        name: 'Images',
-                        extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']
-                    }]
-                });
-
-                if (result) {
-                    // Read file as base64 using Tauri command
-                    const dataUrl = await this.invoke('read_image_as_base64', { imagePath: result });
-
-                    // Show preview
-                    preview.src = dataUrl;
-                    preview.onload = () => {
-                        imageWidth = preview.naturalWidth;
-                        imageHeight = preview.naturalHeight;
-                        aspectRatio = imageWidth / imageHeight;
-                        dimensions.textContent = `${imageWidth} × ${imageHeight}`;
-                        widthInput.value = imageWidth;
-                        heightInput.value = imageHeight;
-                        dimensionsGroup.style.display = 'block';
-                    };
-
-                    previewContainer.style.display = 'block';
-                    imagePath.textContent = result.split(/[/\\]/).pop(); // Handle both / and \ path separators
+                // Check if we're on mobile (iOS/Android)
+                const isMobile = await this.invoke('is_mobile_platform');
+                
+                if (isMobile) {
+                    // On mobile, use native HTML file input for better iCloud/file system access
+                    console.log('Using native file input for mobile platform');
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = 'image/*';
+                    // Make input invisible but clickable by positioning it over the button
+                    fileInput.style.position = 'absolute';
+                    fileInput.style.opacity = '0';
+                    fileInput.style.width = '100%';
+                    fileInput.style.height = '100%';
+                    fileInput.style.top = '0';
+                    fileInput.style.left = '0';
+                    fileInput.style.cursor = 'pointer';
                     
-                    selectedImageData = {
-                        path: result,
-                        dataUrl: dataUrl,
-                        filename: result.split(/[/\\]/).pop() // Handle both / and \ path separators
-                    };
+                    fileInput.addEventListener('change', async (event) => {
+                        console.log('File input change event triggered');
+                        const file = event.target.files[0];
+                        if (file) {
+                            console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+                            
+                            // Read file as data URL
+                            const reader = new FileReader();
+                            reader.onload = async (e) => {
+                                const dataUrl = e.target.result;
+                                
+                                // Show preview
+                                preview.src = dataUrl;
+                                preview.onload = () => {
+                                    imageWidth = preview.naturalWidth;
+                                    imageHeight = preview.naturalHeight;
+                                    aspectRatio = imageWidth / imageHeight;
+                                    dimensions.textContent = `${imageWidth} × ${imageHeight}`;
+                                    widthInput.value = imageWidth;
+                                    heightInput.value = imageHeight;
+                                    dimensionsGroup.style.display = 'block';
+                                    
+                                    // Set selected image data after we have dimensions
+                                    selectedImageData = {
+                                        path: file.name, // On mobile, we only have the name
+                                        dataUrl: dataUrl,
+                                        width: imageWidth,
+                                        height: imageHeight
+                                    };
+                                    
+                                    // Enable save button if name is also filled
+                                    if (nameInput.value.trim()) {
+                                        saveBtn.disabled = false;
+                                    }
+                                };
 
-                    // Enable save button if name is also filled
-                    if (nameInput.value.trim()) {
-                        saveBtn.disabled = false;
+                                previewContainer.style.display = 'block';
+                                imagePath.textContent = file.name;
+                            };
+                            reader.onerror = (error) => {
+                                console.error('FileReader error:', error);
+                                alert('Failed to read file: ' + error);
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                    
+                    // Position the button relatively so the input can overlay it
+                    selectBtn.style.position = 'relative';
+                    selectBtn.appendChild(fileInput);
+                    console.log('File input added as overlay on button');
+                } else {
+                    // Desktop: Use Tauri file dialog
+                    const result = await this.dialog.open({
+                        multiple: false,
+                        filters: [{
+                            name: 'Images',
+                            extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']
+                        }]
+                    });
+
+                    if (result) {
+                        // Read file as base64 using Tauri command
+                        const dataUrl = await this.invoke('read_image_as_base64', { imagePath: result });
+
+                        // Show preview
+                        preview.src = dataUrl;
+                        preview.onload = () => {
+                            imageWidth = preview.naturalWidth;
+                            imageHeight = preview.naturalHeight;
+                            aspectRatio = imageWidth / imageHeight;
+                            dimensions.textContent = `${imageWidth} × ${imageHeight}`;
+                            widthInput.value = imageWidth;
+                            heightInput.value = imageHeight;
+                            dimensionsGroup.style.display = 'block';
+                        };
+
+                        previewContainer.style.display = 'block';
+                        imagePath.textContent = result.split(/[/\\]/).pop(); // Handle both / and \ path separators
+                        
+                        selectedImageData = {
+                            path: result,
+                            dataUrl: dataUrl,
+                            width: imageWidth,
+                            height: imageHeight,
+                            filename: result.split(/[/\\]/).pop() // Handle both / and \ path separators
+                        };
+
+                        // Enable save button if name is also filled
+                        if (nameInput.value.trim()) {
+                            saveBtn.disabled = false;
+                        }
                     }
                 }
             } catch (error) {
@@ -373,33 +446,95 @@ export class FloorManagementDialog {
         // Change image button
         dialog.querySelector('#changeFloorImage').addEventListener('click', async () => {
             try {
-                const result = await this.dialog.open({
-                    multiple: false,
-                    filters: [{
-                        name: 'Images',
-                        extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']
-                    }]
-                });
+                // Check if we're on mobile (iOS/Android)
+                const isMobile = await this.invoke('is_mobile_platform');
+                
+                if (isMobile) {
+                    // On mobile, use native HTML file input for better iCloud/file system access
+                    console.log('Using native file input for mobile platform');
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = 'image/*';
+                    // Make input invisible but clickable by positioning it over the button
+                    fileInput.style.position = 'absolute';
+                    fileInput.style.opacity = '0';
+                    fileInput.style.width = '100%';
+                    fileInput.style.height = '100%';
+                    fileInput.style.top = '0';
+                    fileInput.style.left = '0';
+                    fileInput.style.cursor = 'pointer';
+                    
+                    fileInput.addEventListener('change', async (event) => {
+                        console.log('File input change event triggered');
+                        const file = event.target.files[0];
+                        if (file) {
+                            console.log('File selected:', file.name, 'Size:', file.size, 'Type:', file.type);
+                            
+                            // Read file as data URL
+                            const reader = new FileReader();
+                            reader.onload = async (e) => {
+                                const dataUrl = e.target.result;
+                                
+                                preview.src = dataUrl;
+                                preview.style.display = 'block';
+                                previewPlaceholder.style.display = 'none';
+                                preview.onload = () => {
+                                    widthInput.value = preview.naturalWidth;
+                                    heightInput.value = preview.naturalHeight;
+                                    // Update aspect ratio when new image is loaded
+                                    aspectRatio = preview.naturalWidth / preview.naturalHeight;
+                                    
+                                    // Set image data after dimensions are loaded
+                                    newImageData = {
+                                        path: file.name,
+                                        dataUrl: dataUrl,
+                                        filename: file.name
+                                    };
+                                };
+                            };
+                            reader.onerror = (error) => {
+                                console.error('FileReader error:', error);
+                                alert('Failed to read file: ' + error);
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    });
+                    
+                    // Position the button relatively so the input can overlay it
+                    const changeBtn = dialog.querySelector('#changeFloorImage');
+                    changeBtn.style.position = 'relative';
+                    changeBtn.appendChild(fileInput);
+                    console.log('File input added as overlay on change button');
+                } else {
+                    // Desktop: Use Tauri file dialog
+                    const result = await this.dialog.open({
+                        multiple: false,
+                        filters: [{
+                            name: 'Images',
+                            extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp']
+                        }]
+                    });
 
-                if (result) {
-                    // Read file as base64 using Tauri command
-                    const dataUrl = await this.invoke('read_image_as_base64', { imagePath: result });
+                    if (result) {
+                        // Read file as base64 using Tauri command
+                        const dataUrl = await this.invoke('read_image_as_base64', { imagePath: result });
 
-                    preview.src = dataUrl;
-                    preview.style.display = 'block';
-                    previewPlaceholder.style.display = 'none';
-                    preview.onload = () => {
-                        widthInput.value = preview.naturalWidth;
-                        heightInput.value = preview.naturalHeight;
-                        // Update aspect ratio when new image is loaded
-                        aspectRatio = preview.naturalWidth / preview.naturalHeight;
-                    };
+                        preview.src = dataUrl;
+                        preview.style.display = 'block';
+                        previewPlaceholder.style.display = 'none';
+                        preview.onload = () => {
+                            widthInput.value = preview.naturalWidth;
+                            heightInput.value = preview.naturalHeight;
+                            // Update aspect ratio when new image is loaded
+                            aspectRatio = preview.naturalWidth / preview.naturalHeight;
+                        };
 
-                    newImageData = {
-                        path: result,
-                        dataUrl: dataUrl,
-                        filename: result.split(/[/\\]/).pop() // Handle both / and \ path separators
-                    };
+                        newImageData = {
+                            path: result,
+                            dataUrl: dataUrl,
+                            filename: result.split(/[/\\]/).pop() // Handle both / and \ path separators
+                        };
+                    }
                 }
             } catch (error) {
                 console.error('Failed to select image:', error);

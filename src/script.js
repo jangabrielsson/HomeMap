@@ -1472,6 +1472,15 @@ You can also configure floor plans and manage devices once connected!`;
             this.dataPath = await this.invoke('get_data_path');
             console.log('Data path:', this.dataPath);
             
+            // Sync bundled resources (widgets, icons) on mobile platforms
+            try {
+                console.log('Syncing bundled resources...');
+                await this.invoke('sync_resources');
+                console.log('Resource sync completed');
+            } catch (err) {
+                console.warn('Resource sync warning:', err);
+            }
+            
             // Check if this is first run (no bundled assets copied yet)
             const versionKey = 'bundled_assets_version';
             const copiedVersion = localStorage.getItem(versionKey);
