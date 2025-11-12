@@ -212,28 +212,26 @@ jobs:
           with open(gradle_file, 'r') as f:
               content = f.read()
           
-          # Add keystoreProperties after tauriProperties closing brace (only once)
-          keystore_props = '''
-          
-          val keystoreProperties = Properties().apply {
+          # Add keystoreProperties inside android { } block before defaultConfig (only once)
+          keystore_props = '''    val keystoreProperties = Properties().apply {
               val keystorePropFile = file("../keystore.properties")
               if (keystorePropFile.exists()) {
                   keystorePropFile.inputStream().use { load(it) }
               }
-          }'''
+          }
+          '''
           
           if 'keystoreProperties' not in content:
-              # Insert after the tauriProperties block ends
+              # Insert inside android block, before defaultConfig
               content = re.sub(
-                  r'(val tauriProperties = Properties\(\)\.apply \{[^}]+\}\n)',
-                  r'\1' + keystore_props + '\n',
+                  r'(android \{\n    compileSdk[^\n]+\n    namespace[^\n]+\n)',
+                  r'\1' + keystore_props,
                   content,
                   count=1
               )
           
           # Add signingConfigs block inside android { } after defaultConfig (only once)
-          signing_configs = '''
-              
+          signing_configs = '''    
               signingConfigs {
                   create("release") {
                       if (keystoreProperties.isNotEmpty()) {
@@ -243,13 +241,14 @@ jobs:
                           keyPassword = keystoreProperties.getProperty("keyPassword")
                       }
                   }
-              }'''
+              }
+          '''
           
           if 'signingConfigs' not in content:
               # Find defaultConfig block and add signing after it
               content = re.sub(
                   r'(    defaultConfig \{[^}]*\})\n',
-                  r'\1\n' + signing_configs + '\n',
+                  r'\1\n' + signing_configs,
                   content,
                   count=1,
                   flags=re.DOTALL
