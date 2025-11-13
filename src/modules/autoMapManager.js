@@ -87,9 +87,12 @@ export class AutoMapManager {
     calculateGridPosition(index, floorWidth, floorHeight) {
         const GRID_SPACING_X = 100;
         const GRID_SPACING_Y = 100;
-        const START_X = 50;
-        const START_Y = 50;
-        const MARGIN_RIGHT = 50; // Space from right edge
+        
+        // Start from a more visible, center-biased position
+        // Use percentages of floor dimensions to ensure visibility on all screen sizes
+        const START_X = Math.max(150, Math.floor(floorWidth * 0.15));  // 15% from left, min 150px
+        const START_Y = Math.max(150, Math.floor(floorHeight * 0.15)); // 15% from top, min 150px
+        const MARGIN_RIGHT = Math.floor(floorWidth * 0.1); // 10% from right edge
         
         // Calculate how many devices fit per row based on floor width
         const availableWidth = floorWidth - START_X - MARGIN_RIGHT;
