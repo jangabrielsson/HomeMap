@@ -21,7 +21,16 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/**",
+          "$RESOURCE/**",
+          "/data/data/com.gabrielsson.homemap/**",
+          "/data/user/0/com.gabrielsson.homemap/**"
+        ]
+      }
     }
   },
   "bundle": {

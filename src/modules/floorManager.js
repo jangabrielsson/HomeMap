@@ -468,6 +468,7 @@ export class FloorManager {
                 
                 // Calculate the actual rendered image size (same as in renderDevicesOnFloor)
                 const imgRect = img.getBoundingClientRect();
+                const containerRect = container.getBoundingClientRect();
                 const containerAspect = imgRect.width / imgRect.height;
                 const imageAspect = img.naturalWidth / img.naturalHeight;
                 
@@ -487,27 +488,28 @@ export class FloorManager {
                     imageOffsetY = (imgRect.height - renderedHeight) / 2;
                 }
                 
-                // Cursor/touch position relative to img element (in scaled coordinates)
-                let x = clientX - imgRect.left;
-                let y = clientY - imgRect.top;
+                // Read the widget's actual position from the DOM (in unscaled container coordinates)
+                // The position was set by handleDragMove in deviceEl.style.left/top
+                const leftPx = parseFloat(deviceEl.style.left) || 0;
+                const topPx = parseFloat(deviceEl.style.top) || 0;
                 
-                // Subtract the image offset to get position within the actual rendered image
-                x = x - imageOffsetX;
-                y = y - imageOffsetY;
+                // Convert from container coordinates to scaled viewport coordinates
+                const xInViewport = (leftPx * scale) - imageOffsetX;
+                const yInViewport = (topPx * scale) - imageOffsetY;
                 
-                // Clamp to rendered image bounds (scaled)
-                x = Math.max(0, Math.min(x, renderedWidth));
-                y = Math.max(0, Math.min(y, renderedHeight));
+                // Clamp to rendered image bounds
+                const xClamped = Math.max(0, Math.min(xInViewport, renderedWidth));
+                const yClamped = Math.max(0, Math.min(yInViewport, renderedHeight));
                 
                 // Convert from rendered image pixels to natural image pixels
-                const naturalX = (x / renderedWidth) * img.naturalWidth;
-                const naturalY = (y / renderedHeight) * img.naturalHeight;
+                const naturalX = (xClamped / renderedWidth) * img.naturalWidth;
+                const naturalY = (yClamped / renderedHeight) * img.naturalHeight;
                 
                 // Update device position on current floor
                 const newPosition = { x: Math.round(naturalX), y: Math.round(naturalY) };
                 this.homeMap.updateDevicePosition(device, this.homeMap.currentFloor, newPosition);
                 
-                console.log(`Device ${device.id} SAVED: cursor=(${clientX}, ${clientY}), renderedImage=${renderedWidth.toFixed(1)}x${renderedHeight.toFixed(1)}, imageOffset=(${imageOffsetX.toFixed(1)}, ${imageOffsetY.toFixed(1)}), inImage=(${x.toFixed(1)}, ${y.toFixed(1)}), natural=(${newPosition.x}, ${newPosition.y})`);
+                console.log(`Device ${device.id} SAVED: container=(${leftPx.toFixed(1)}, ${topPx.toFixed(1)}), scale=${scale.toFixed(2)}, renderedImage=${renderedWidth.toFixed(1)}x${renderedHeight.toFixed(1)}, natural=(${newPosition.x}, ${newPosition.y})`);
                 
                 // Save config
                 await this.homeMap.hc3ApiManager.saveConfig();

@@ -187,12 +187,51 @@ export class WidgetManager {
      */
     async loadAllAvailableWidgets() {
         try {
+            // Known built-in widget types (fallback if list_directory fails on Android)
+            const knownBuiltInWidgets = [
+                'binarySwitch', 'light', 'lightdim', 'lightcolor',
+                'doorLock', 'doorSensor', 'windowSensor', 'motion', 'smokeSensor',
+                'temperature', 'humiditymeter', 'luxmeter', 'energymeter',
+                'curtain', 'gauge', 'genericdevice'
+            ];
+            
             // Load built-in widgets
             const builtInPath = `${this.dataPath}/widgets/built-in`;
+            console.log('[WidgetManager] Loading widgets from:', builtInPath);
+            
+            let files = [];
             try {
-                const files = await this.invoke('list_directory', { path: builtInPath });
-                console.log('Found built-in widget files:', files);
-                
+                files = await this.invoke('list_directory', { path: builtInPath });
+                console.log('[WidgetManager] list_directory returned:', files, 'Length:', files?.length);
+            } catch (error) {
+                console.warn('[WidgetManager] list_directory failed:', error);
+            }
+            
+            // If list_directory returned empty or failed, use known widgets list
+            if (!files || files.length === 0) {
+                console.log('[WidgetManager] Using fallback: trying to load known built-in widgets');
+                for (const widgetType of knownBuiltInWidgets) {
+                    try {
+                        const jsonContent = await this.invoke('read_widget_json', { widgetType });
+                        const widget = JSON.parse(jsonContent);
+                        widget._package = 'com.fibaro.built-in';
+                        
+                        // Load icon set if specified
+                        if (widget.iconSet) {
+                            widget.iconSetMap = await this.loadIconSet(widget.iconSet, widget._package);
+                        } else if (widget.render?.icon?.set) {
+                            widget.iconSetMap = await this.loadIconSet(widget.render.icon.set, widget._package);
+                        }
+                        
+                        this.widgets[widgetType] = widget;
+                        console.log(`[WidgetManager] Loaded built-in widget: ${widgetType}`);
+                    } catch (error) {
+                        // Widget file doesn't exist, skip it
+                        console.debug(`[WidgetManager] Widget ${widgetType} not found (ok if user hasn't added it)`);
+                    }
+                }
+            } else {
+                // list_directory worked, use the file list
                 for (const file of files) {
                     if (file.endsWith('.json')) {
                         const widgetType = file.replace('.json', '');
@@ -210,20 +249,18 @@ export class WidgetManager {
                                 }
                                 
                                 this.widgets[widgetType] = widget;
-                                console.log(`Loaded built-in widget: ${widgetType}`);
+                                console.log(`[WidgetManager] Loaded built-in widget: ${widgetType}`);
                             } catch (error) {
-                                console.warn(`Failed to load widget ${widgetType}:`, error);
+                                console.warn(`[WidgetManager] Failed to load widget ${widgetType}:`, error);
                             }
                         }
                     }
                 }
-            } catch (error) {
-                console.error('Failed to load built-in widgets:', error);
             }
             
             // TODO: Also load package widgets when packages are supported
             
-            console.log(`Total widgets available: ${Object.keys(this.widgets).length}`);
+            console.log(`[WidgetManager] Total widgets available: ${Object.keys(this.widgets).length}`);
             return this.widgets;
         } catch (error) {
             console.error('Failed to load available widgets:', error);

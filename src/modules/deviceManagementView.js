@@ -49,13 +49,29 @@ export class DeviceManagementView {
 
         // Get available widgets from package manager (same as dialog does)
         const packageManager = this.app.widgetManager.packageManager;
-        const builtInWidgets = await packageManager.discoverBuiltInWidgets();
+        
+        // Initialize package manager if needed
+        if (!packageManager.dataPath) {
+            console.log('[DeviceManagement] Initializing PackageManager...');
+            await packageManager.init();
+        }
+        
+        console.log('[DeviceManagement] About to discover widgets...');
+        
+        let builtInWidgets = [];
+        try {
+            builtInWidgets = await packageManager.discoverBuiltInWidgets();
+            console.log('[DeviceManagement] Widgets discovered:', builtInWidgets.length);
+        } catch (error) {
+            console.error('[DeviceManagement] Error discovering widgets:', error);
+        }
         
         // Create widget options array with display names and values
         const widgetOptions = builtInWidgets.map(w => ({
             value: w.id,
             display: `${w.id} (com.fibaro.built-in)`
         }));
+        console.log('[DeviceManagement] Widget options created:', widgetOptions.length);
         
         // Add widgets from installed packages
         if (packageManager.installedPackages?.packages) {

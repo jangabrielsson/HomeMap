@@ -520,7 +520,7 @@ class HomeMap {
                 hc3_user: document.getElementById('hc3User').value,
                 hc3_password: document.getElementById('hc3Password').value,
                 hc3_protocol: document.getElementById('hc3Protocol').value,
-                homemap_path: document.getElementById('homemapPath').value
+                homemap_path: '' // Leave empty on all platforms - let Rust determine the path
             };
 
             await this.invoke('save_app_settings', { settings });
@@ -1384,7 +1384,7 @@ You can also configure floor plans and manage devices once connected!`;
     async copyBundledAssetsIfNeeded() {
         try {
             console.log('=== copyBundledAssetsIfNeeded STARTING ===');
-            const manifestVersion = '1.0.0';
+            const manifestVersion = '1.0.1';
             const versionKey = 'bundled_assets_version';
             
             // Check if we've already copied this version
@@ -1397,11 +1397,12 @@ You can also configure floor plans and manage devices once connected!`;
                 return;
             }
             
-            // Check if assets already exist (e.g., copied by Rust on iOS)
+            // Check if assets already exist (check widgets directory instead of config.json)
             try {
-                const testPath = `${this.dataPath}/config.json`;
-                const testRead = await this.invoke('read_file_as_text', { filePath: testPath });
-                if (testRead) {
+                const testPath = `${this.dataPath}/widgets/built-in`;
+                const { readDir } = window.__TAURI__.fs;
+                const entries = await readDir(testPath);
+                if (entries && entries.length > 0) {
                     console.log('Assets already exist (likely copied by Rust), skipping JS copy');
                     localStorage.setItem(versionKey, manifestVersion);
                     // Still check if built-in resources need syncing
@@ -1421,15 +1422,18 @@ You can also configure floor plans and manage devices once connected!`;
             const manifestB64 = await this.invoke('read_bundled_asset', { 
                 assetPath: 'asset-manifest.json' 
             });
-            const manifestJson = atob(manifestB64);
-            const manifest = JSON.parse(manifestJson);
-            console.log(`Found ${manifest.files.length} files to copy`);
             
-            let successCount = 0;
-            let errorCount = 0;
-            
-            // Copy each file from manifest
-            for (const file of manifest.files) {
+            try {
+                const manifestJson = atob(manifestB64);
+                const manifest = JSON.parse(manifestJson);
+                console.log(`Found ${manifest.files.length} files to copy`);
+                
+                let successCount = 0;
+                let errorCount = 0;
+                let firstError = null;
+                
+                // Copy each file from manifest
+                for (const file of manifest.files) {
                 try {
                     // Read file from bundled assets using Rust command
                     const fileB64 = await this.invoke('read_bundled_asset', { 
@@ -1444,12 +1448,15 @@ You can also configure floor plans and manage devices once connected!`;
                     });
                     
                     successCount++;
-                    if (successCount % 5 === 0) {
+                    if (successCount % 10 === 0) {
                         console.log(`Progress: ${successCount}/${manifest.files.length} files copied`);
                     }
                 } catch (err) {
                     console.error(`Error copying ${file}:`, err);
                     errorCount++;
+                    if (!firstError) {
+                        firstError = `${file}: ${err.message || err}`;
+                    }
                 }
             }
             
@@ -1458,6 +1465,9 @@ You can also configure floor plans and manage devices once connected!`;
             // Store version to avoid re-copying
             if (successCount > 0) {
                 localStorage.setItem(versionKey, manifestVersion);
+            }
+            } catch (parseError) {
+                console.error('Failed to parse manifest:', parseError);
             }
             
         } catch (error) {
@@ -1486,13 +1496,23 @@ You can also configure floor plans and manage devices once connected!`;
             const copiedVersion = localStorage.getItem(versionKey);
             const isFirstRun = !copiedVersion;
             
-            if (isFirstRun) {
-                // On first run, wait for asset copy to complete
-                console.log('First run detected, waiting for asset copy...');
+            // On Android/iOS, always wait for asset copy to ensure widgets are available
+            // Check if we're on a mobile platform by looking at __TAURI_INTERNALS__
+            const isMobile = window.__TAURI_INTERNALS__?.metadata?.currentTarget?.includes('android') || 
+                           window.__TAURI_INTERNALS__?.metadata?.currentTarget?.includes('ios') ||
+                           navigator.userAgent.toLowerCase().includes('android') ||
+                           navigator.userAgent.toLowerCase().includes('iphone') ||
+                           navigator.userAgent.toLowerCase().includes('ipad');
+            
+            console.log('Platform check - isMobile:', isMobile, 'isFirstRun:', isFirstRun, 'userAgent:', navigator.userAgent);
+            
+            if (isFirstRun || isMobile) {
+                // Wait for asset copy to complete before continuing
+                console.log(isFirstRun ? 'First run detected, waiting for asset copy...' : 'Mobile platform detected, ensuring assets are up to date...');
                 await this.copyBundledAssetsIfNeeded();
                 console.log('Asset copy completed, continuing startup...');
             } else {
-                // On subsequent runs, copy in background (updates)
+                // On desktop subsequent runs, copy in background (updates)
                 this.copyBundledAssetsIfNeeded().then(() => {
                     console.log('Background asset copy completed');
                 }).catch(err => {

@@ -27,6 +27,7 @@ class PackageManager {
      */
     async init() {
         this.dataPath = await this.invoke('get_data_path');
+        console.log('[PackageManager] Initialized with dataPath:', this.dataPath);
         await this.loadInstalledPackages();
         await this.loadWidgetMappings();
     }
@@ -550,53 +551,77 @@ class PackageManager {
         const widgets = [];
         const widgetIds = new Set(); // Prevent duplicates
         
-        // Try new location: widgets/built-in/
+        // Use Tauri fs plugin's readDir API with ABSOLUTE path
+        // BaseDirectory.AppData doesn't work correctly on Android, so we use absolute path
         try {
-            const builtInPath = joinPath(this.dataPath, 'widgets', 'built-in');
-            const files = await this.invoke('list_directory', { path: builtInPath });
+            // Access readDir from window.__TAURI__.fs
+            const { readDir } = window.__TAURI__.fs;
             
-            for (const file of files) {
-                if (file.endsWith('.json')) {
-                    const widgetId = file.replace('.json', '');
-                    if (!widgetIds.has(widgetId)) {
-                        widgetIds.add(widgetId);
-                        widgets.push({
-                            id: widgetId,
-                            package: 'built-in',
-                            fullRef: `built-in/${widgetId}`
-                        });
+            if (!readDir) {
+                console.error('readDir not available in window.__TAURI__.fs');
+                return widgets;
+            }
+            
+            // Build absolute path to widgets directory
+            // Use the path as-is from Rust (already correct for Android: /data/user/0/...)
+            const widgetsPath = `${this.dataPath}/widgets/built-in`;
+            
+            // Try new structure first: widgets/built-in/
+            try {
+                // Use absolute path instead of baseDir since Android doesn't resolve correctly
+                const entries = await readDir(widgetsPath);
+                
+                console.log(`Found ${entries.length} widget entries in widgets/built-in`);
+                
+                for (const entry of entries) {
+                    // Look for .json files
+                    if (entry.isFile && entry.name.endsWith('.json')) {
+                        const widgetId = entry.name.replace('.json', '');
+                        if (!widgetIds.has(widgetId)) {
+                            widgetIds.add(widgetId);
+                            widgets.push({
+                                id: widgetId,
+                                package: 'built-in',
+                                fullRef: `built-in/${widgetId}`
+                            });
+                        }
                     }
+                }
+                
+                console.log(`Discovered ${widgets.length} built-in widgets`);
+            } catch (error) {
+                console.error('Error reading widgets/built-in:', error);
+                
+                // Fallback to legacy structure: widgets/ (flat)
+                try {
+                    const legacyPath = `${this.dataPath}/widgets`;
+                    const entries = await readDir(legacyPath);
+                    
+                    console.log(`Fallback: Found ${entries.length} entries in widgets/`);
+                    
+                    for (const entry of entries) {
+                        // Look for .json files (skip subdirectories)
+                        if (entry.isFile && entry.name.endsWith('.json')) {
+                            const widgetId = entry.name.replace('.json', '');
+                            if (!widgetIds.has(widgetId)) {
+                                widgetIds.add(widgetId);
+                                widgets.push({
+                                    id: widgetId,
+                                    package: 'built-in',
+                                    fullRef: `built-in/${widgetId}`
+                                });
+                            }
+                        }
+                    }
+                } catch (legacyError) {
+                    console.error('Error reading widgets/:', legacyError);
                 }
             }
         } catch (error) {
-            console.warn('Could not discover built-in widgets from widgets/built-in:', error);
-        }
-        
-        // Try legacy location: widgets/ (for backward compatibility)
-        try {
-            const legacyPath = joinPath(this.dataPath, 'widgets');
-            const files = await this.invoke('list_directory', { path: legacyPath });
-            
-            for (const file of files) {
-                // Skip if it's a directory (like "built-in", "packages", "icons")
-                if (file.endsWith('.json')) {
-                    const widgetId = file.replace('.json', '');
-                    if (!widgetIds.has(widgetId)) {
-                        widgetIds.add(widgetId);
-                        widgets.push({
-                            id: widgetId,
-                            package: 'built-in',
-                            fullRef: `built-in/${widgetId}`
-                        });
-                    }
-                }
-            }
-        } catch (error) {
-            console.warn('Could not discover widgets from legacy location:', error);
+            console.error('Fatal error discovering widgets:', error);
         }
         
         return widgets;
-
     }
 
     /**

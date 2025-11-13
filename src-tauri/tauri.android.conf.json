@@ -7,8 +7,18 @@
     "security": {
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**",
+          "$APPDATA/**",
+          "/data/data/com.gabrielsson.homemap/**",
+          "/data/user/0/com.gabrielsson.homemap/**"
+        ]
       }
     }
+  },
+  "bundle": {
+    "resources": [
+      "../homemapdata.example"
+    ]
   }
 }

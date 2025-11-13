@@ -165,6 +165,23 @@ fn get_homemap_data_path() -> Result<PathBuf, String> {
                 return Ok(path_buf);
             } else {
                 println!("Warning: Configured homemap_path does not exist: {:?}", path_buf);
+                // On Android, try the alternate path (/data/user/0 vs /data/data)
+                #[cfg(target_os = "android")]
+                {
+                    let path_str = path_buf.to_string_lossy().to_string();
+                    let alternate_path = if path_str.contains("/data/data/") {
+                        PathBuf::from(path_str.replace("/data/data/", "/data/user/0/"))
+                    } else if path_str.contains("/data/user/0/") {
+                        PathBuf::from(path_str.replace("/data/user/0/", "/data/data/"))
+                    } else {
+                        path_buf.clone()
+                    };
+                    if alternate_path != path_buf && alternate_path.exists() {
+                        println!("Using alternate Android path: {:?}", alternate_path);
+                        sync_builtin_resources(&alternate_path)?;
+                        return Ok(alternate_path);
+                    }
+                }
             }
         }
     }
@@ -172,8 +189,18 @@ fn get_homemap_data_path() -> Result<PathBuf, String> {
     // Create default location in app data directory
     #[cfg(target_os = "android")]
     let data_dir = {
-        // On Android, use /data/data/<package>/files/homemapdata
-        PathBuf::from("/data/data/com.gabrielsson.homemap/files/homemapdata")
+        // On Android, the actual path is /data/user/0/<package>/files which is a symlink to /data/data/<package>/files
+        // We need to append homemapdata to wherever Android decides the files directory is
+        use std::env;
+        // Try to get the actual Android files directory from environment
+        let base = if env::var("ANDROID_DATA").is_ok() {
+            // If ANDROID_DATA exists, we're on Android - use the user-specific path
+            PathBuf::from("/data/user/0/com.gabrielsson.homemap/files")
+        } else {
+            // Fallback to /data/data path
+            PathBuf::from("/data/data/com.gabrielsson.homemap/files")
+        };
+        base.join("homemapdata")
     };
     
     #[cfg(target_os = "ios")]
@@ -201,8 +228,15 @@ fn get_homemap_data_path() -> Result<PathBuf, String> {
         // Create default config.json
         initialize_default_config(&data_dir)?;
     } else {
-        // Directory exists, just sync built-in resources
-        sync_builtin_resources(&data_dir)?;
+        // Directory exists - check if it needs initialization (e.g., after uninstall on Android)
+        let config_file = data_dir.join("config.json");
+        if !config_file.exists() {
+            println!("config.json missing in existing directory - reinitializing...");
+            initialize_default_config(&data_dir)?;
+        } else {
+            // Config exists, just sync built-in resources
+            sync_builtin_resources(&data_dir)?;
+        }
     }
     
     println!("Using default homemapdata: {:?}", data_dir);
@@ -227,24 +261,31 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
             }
             Err(e) => {
                 println!("Warning: Could not find template directory: {}", e);
-                println!("Creating minimal config.json...");
-                println!("NOTE: On Android, built-in widgets/icons are not available without template extraction");
-                println!("TODO: Implement Android APK asset extraction for homemapdata.example");
                 
-                // Create a minimal config.json with default floor if template not found
-                let minimal_config = serde_json::json!({
-                    "name": "HomeMap",
-                    "icon": "🏠",
-                    "floors": [{
-                        "id": "default-floor",
-                        "name": "Main Floor",
-                        "image": "images/default-floor.png"
-                    }],
-                    "devices": []
-                });
+                #[cfg(not(target_os = "android"))]
+                {
+                    println!("Creating minimal config.json...");
+                    // Create a minimal config.json with default floor if template not found
+                    let minimal_config = serde_json::json!({
+                        "name": "HomeMap",
+                        "icon": "🏠",
+                        "floors": [{
+                            "id": "default-floor",
+                            "name": "Main Floor",
+                            "image": "images/default-floor.png"
+                        }],
+                        "devices": []
+                    });
+                    
+                    fs::write(&config_file, serde_json::to_string_pretty(&minimal_config).unwrap())
+                        .map_err(|e| format!("Failed to create minimal config.json: {}", e))?;
+                }
                 
-                fs::write(&config_file, serde_json::to_string_pretty(&minimal_config).unwrap())
-                    .map_err(|e| format!("Failed to create minimal config.json: {}", e))?;
+                #[cfg(target_os = "android")]
+                {
+                    println!("On Android - skipping config.json creation, will be handled by JavaScript asset copy");
+                    // DO NOT create config.json on Android - let JavaScript handle asset extraction
+                }
                 
                 // Create directory structure
                 fs::create_dir_all(data_dir.join("widgets").join("built-in"))
@@ -260,6 +301,7 @@ fn initialize_default_config(data_dir: &PathBuf) -> Result<(), String> {
                 
                 // On mobile, embed the default floor image at compile time
                 let default_floor_path = data_dir.join("images").join("default-floor.png");
+
                 if !default_floor_path.exists() {
                     println!("Creating default floor image from embedded resource");
                     
@@ -445,22 +487,26 @@ fn sync_builtin_resources_from_template(template_dir: &PathBuf, data_dir: &PathB
     let user_widgets = data_dir.join("widgets").join("built-in");
     
     if template_widgets.exists() {
-        // Remove old built-ins and replace with new ones
-        if user_widgets.exists() {
-            fs::remove_dir_all(&user_widgets)
-                .map_err(|e| format!("Failed to remove old built-in widgets: {}", e))?;
-        }
+        println!("Template widgets found at: {:?}", template_widgets);
         
+        // Don't remove old built-ins - just overwrite/update
         // Create parent directory if needed
         if let Some(parent) = user_widgets.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create widgets directory: {}", e))?;
         }
         
-        copy_dir_recursive(&template_widgets, &user_widgets)
-            .map_err(|e| format!("Failed to sync built-in widgets: {}", e))?;
-        
-        println!("Synced built-in widgets");
+        match copy_dir_recursive(&template_widgets, &user_widgets) {
+            Ok(_) => {
+                println!("Synced built-in widgets successfully");
+            },
+            Err(e) => {
+                println!("WARNING: Failed to sync built-in widgets: {}", e);
+                // Don't fail the whole sync if widgets fail
+            }
+        }
+    } else {
+        println!("WARNING: Template widgets not found at: {:?}", template_widgets);
     }
     
     // Sync icons/built-in
@@ -468,22 +514,24 @@ fn sync_builtin_resources_from_template(template_dir: &PathBuf, data_dir: &PathB
     let user_icons = data_dir.join("icons").join("built-in");
     
     if template_icons.exists() {
-        // Remove old built-ins and replace with new ones
-        if user_icons.exists() {
-            fs::remove_dir_all(&user_icons)
-                .map_err(|e| format!("Failed to remove old built-in icons: {}", e))?;
-        }
+        println!("Template icons found at: {:?}", template_icons);
         
+        // Don't remove old built-ins - just overwrite/update
         // Create parent directory if needed
         if let Some(parent) = user_icons.parent() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create icons directory: {}", e))?;
         }
         
-        copy_dir_recursive(&template_icons, &user_icons)
-            .map_err(|e| format!("Failed to sync built-in icons: {}", e))?;
-        
-        println!("Synced built-in icons");
+        match copy_dir_recursive(&template_icons, &user_icons) {
+            Ok(_) => println!("Synced built-in icons successfully"),
+            Err(e) => {
+                println!("WARNING: Failed to sync built-in icons: {}", e);
+                // Don't fail the whole sync if icons fail
+            }
+        }
+    } else {
+        println!("WARNING: Template icons not found at: {:?}", template_icons);
     }
     
     Ok(())
@@ -648,6 +696,9 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
         fs::create_dir_all(dst)?;
     }
     
+    #[cfg(target_os = "android")]
+    println!("[Rust] copy_dir_recursive from {:?} to {:?}", src, dst);
+    
     for entry in fs::read_dir(src)? {
         let entry = entry?;
         let path = entry.path();
@@ -664,8 +715,13 @@ fn copy_dir_recursive(src: &PathBuf, dst: &PathBuf) -> std::io::Result<()> {
             copy_dir_recursive(&path, &dest_path)?;
         } else {
             fs::copy(&path, &dest_path)?;
+            #[cfg(target_os = "android")]
+            println!("[Rust] Copied file: {:?}", dest_path);
         }
     }
+    
+    #[cfg(target_os = "android")]
+    println!("[Rust] copy_dir_recursive completed for {:?}", dst);
     
     Ok(())
 }
@@ -706,7 +762,7 @@ fn sync_resources(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn read_image_as_base64(app: tauri::AppHandle, image_path: String) -> Result<String, String> {
+async fn read_image_as_base64(_app: tauri::AppHandle, image_path: String) -> Result<String, String> {
     // On Android, content:// URIs need to be read through ContentResolver using JNI
     #[cfg(target_os = "android")]
     {
@@ -716,7 +772,7 @@ async fn read_image_as_base64(app: tauri::AppHandle, image_path: String) -> Resu
     }
     
     // Regular file path handling for desktop platforms and non-content URIs
-    let mut full_path = PathBuf::from(&image_path);
+    let full_path = PathBuf::from(&image_path);
     
     // On Android, use Tauri's fs plugin for reading files from app storage
     #[cfg(target_os = "android")]
@@ -733,7 +789,7 @@ async fn read_image_as_base64(app: tauri::AppHandle, image_path: String) -> Resu
         let scope = app.fs_scope();
         
         // Check if path is in allowed scope
-        if scope.is_allowed(&full_path) || full_path.starts_with("/data/data/com.gabrielsson.homemap/") {
+        if scope.is_allowed(&full_path) || full_path.starts_with("/data/data/com.gabrielsson.homemap/") || full_path.starts_with("/data/user/0/com.gabrielsson.homemap/") {
             match std::fs::read(&full_path) {
                 Ok(data) => {
                     // Detect image type and return base64
@@ -946,13 +1002,24 @@ fn list_directory(path: String) -> Result<Vec<String>, String> {
         }
     }
     
+    // Check if directory exists and is readable
+    if !path_buf.exists() {
+        return Err(format!("Directory does not exist: {}", path));
+    }
+    
+    if !path_buf.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
+    }
+    
     let entries = fs::read_dir(&path_buf)
-        .map_err(|e| format!("Failed to read directory: {}", e))?;
+        .map_err(|e| format!("Failed to read directory '{}': {}", path, e))?;
     
     let mut items = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+    
+    for entry_result in entries {
+        let entry = entry_result.map_err(|e| format!("Failed to read entry: {}", e))?;
         let file_name = entry.file_name();
+        
         if let Some(name) = file_name.to_str() {
             let path = entry.path();
             if path.is_dir() {
@@ -970,15 +1037,21 @@ fn list_directory(path: String) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 fn save_config(file_path: String, content: String) -> Result<(), String> {
+    println!("[DEBUG save_config] file_path: {}", file_path);
+    
     // Validate path is within homemap data directory (mobile platforms only)
     #[cfg(any(target_os = "ios", target_os = "android"))]
     {
         let homemap_path = get_homemap_data_path()?;
         let target_path = PathBuf::from(&file_path);
         
+        println!("[DEBUG save_config] homemap_path: {:?}", homemap_path);
+        println!("[DEBUG save_config] target_path: {:?}", target_path);
+        println!("[DEBUG save_config] starts_with check: {}", target_path.starts_with(&homemap_path));
+        
         // Ensure the path is within homemap data directory
         if !target_path.starts_with(&homemap_path) {
-            return Err("Access denied: path must be within homemap data directory".to_string());
+            return Err(format!("Access denied: path must be within homemap data directory. homemap_path={:?}, target_path={:?}", homemap_path, target_path));
         }
     }
     
@@ -995,6 +1068,58 @@ fn save_config(file_path: String, content: String) -> Result<(), String> {
     
     println!("Saved file to: {:?}", target_path);
     Ok(())
+}
+
+#[tauri::command]
+fn discover_built_in_widgets() -> Result<Vec<String>, String> {
+    let homemap_path = get_homemap_data_path()?;
+    let widgets_path = homemap_path.join("widgets").join("built-in");
+    
+    #[cfg(target_os = "android")]
+    println!("[Rust] discover_built_in_widgets: checking path {:?}", widgets_path);
+    
+    // Try using walkdir which might have better Android support
+    let mut found_widgets = Vec::new();
+    
+    match walkdir::WalkDir::new(&widgets_path)
+        .max_depth(1)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .collect::<Vec<_>>()
+    {
+        entries => {
+            #[cfg(target_os = "android")]
+            println!("[Rust] walkdir found {} entries", entries.len());
+            
+            for entry in entries {
+                if entry.path() != widgets_path {
+                    if let Some(file_name) = entry.path().file_name() {
+                        if let Some(name_str) = file_name.to_str() {
+                            if name_str.ends_with(".json") {
+                                let widget_id = name_str.trim_end_matches(".json");
+                                found_widgets.push(widget_id.to_string());
+                                #[cfg(target_os = "android")]
+                                println!("[Rust] Found widget via walkdir: {}", widget_id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    #[cfg(target_os = "android")]
+    println!("[Rust] discover_built_in_widgets: found {} widgets via walkdir", found_widgets.len());
+    
+    if !found_widgets.is_empty() {
+        return Ok(found_widgets);
+    }
+    
+    // Fallback: Return empty list
+    #[cfg(target_os = "android")]
+    println!("[Rust] Returning empty list - directory listing not working on this device");
+    
+    Ok(Vec::new())
 }
 
 #[tauri::command]
@@ -1199,7 +1324,19 @@ fn save_app_settings(settings: AppSettings) -> Result<(), String> {
             .join("HomeMap");
         
         #[cfg(target_os = "android")]
-        let dir = PathBuf::from("/data/data/com.gabrielsson.homemap/files/.config/HomeMap");
+        let dir = {
+            // Use /data/user/0 which is the actual path (symlink to /data/data)
+            use std::env;
+            let base = env::var("ANDROID_DATA").ok()
+                .and_then(|_| {
+                    Some(PathBuf::from("/data/user/0/com.gabrielsson.homemap/files"))
+                })
+                .or_else(|| {
+                    Some(PathBuf::from("/data/data/com.gabrielsson.homemap/files"))
+                })
+                .unwrap();
+            base.join(".config").join("HomeMap")
+        };
         
         dir
     };
@@ -1213,6 +1350,11 @@ fn save_app_settings(settings: AppSettings) -> Result<(), String> {
         .map_err(|e| format!("Failed to create config directory: {}", e))?;
     
     let config_file = config_dir.join("settings.json");
+    
+    println!("[DEBUG save_app_settings] Saving settings:");
+    println!("  homemap_path: '{}'", settings.homemap_path);
+    println!("  config_file: {:?}", config_file);
+    
     let json = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
     
@@ -1267,7 +1409,19 @@ fn load_app_settings() -> Result<Option<AppSettings>, String> {
             .join("HomeMap");
         
         #[cfg(target_os = "android")]
-        let dir = PathBuf::from("/data/data/com.gabrielsson.homemap/files/.config/HomeMap");
+        let dir = {
+            // Use /data/user/0 which is the actual path (symlink to /data/data)
+            use std::env;
+            let base = env::var("ANDROID_DATA").ok()
+                .and_then(|_| {
+                    Some(PathBuf::from("/data/user/0/com.gabrielsson.homemap/files"))
+                })
+                .or_else(|| {
+                    Some(PathBuf::from("/data/data/com.gabrielsson.homemap/files"))
+                })
+                .unwrap();
+            base.join(".config").join("HomeMap")
+        };
         
         dir
     };
@@ -1362,63 +1516,85 @@ fn read_bundled_asset(app: tauri::AppHandle, asset_path: String) -> Result<Strin
     
     #[cfg(target_os = "android")]
     {
-        // On Android, read from the APK zip file directly
-        if asset_path == "asset-manifest.json" {
-            // Embed manifest at compile time since it's small  
-            let embedded_manifest = include_bytes!("../../homemapdata.example/asset-manifest.json");
-            println!("Returning embedded manifest: {} bytes", embedded_manifest.len());
-            return Ok(BASE64_STD.encode(embedded_manifest));
+        use jni::JavaVM;
+        use jni::objects::{JObject, JValue};
+        use std::io::Read;
+        
+        // Get Java VM and attach to current thread
+        let ctx = ndk_context::android_context();
+        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }
+            .map_err(|e| format!("Failed to get JavaVM: {}", e))?;
+        
+        let mut env = vm.attach_current_thread()
+            .map_err(|e| format!("Failed to attach thread: {}", e))?;
+        
+        // Get Android context
+        let context = unsafe { JObject::from_raw(ctx.context().cast()) };
+        
+        // Get AssetManager: context.getAssets()
+        let asset_manager = env.call_method(
+            &context,
+            "getAssets",
+            "()Landroid/content/res/AssetManager;",
+            &[]
+        ).map_err(|e| format!("Failed to get AssetManager: {}", e))?;
+        
+        let asset_manager = asset_manager.l()
+            .map_err(|e| format!("Failed to convert AssetManager: {}", e))?;
+        
+        // Build asset path: _up_/homemapdata.example/{asset_path}
+        let full_asset_path = format!("_up_/homemapdata.example/{}", asset_path);
+        
+        let path_jstring = env.new_string(&full_asset_path)
+            .map_err(|e| format!("Failed to create path string: {}", e))?;
+        
+        // Open asset: assetManager.open(path)
+        let input_stream = env.call_method(
+            &asset_manager,
+            "open",
+            "(Ljava/lang/String;)Ljava/io/InputStream;",
+            &[JValue::Object(&path_jstring)]
+        ).map_err(|e| format!("Failed to open asset '{}': {}", full_asset_path, e))?;
+        
+        let input_stream = input_stream.l()
+            .map_err(|e| format!("Failed to convert InputStream: {}", e))?;
+        
+        // Read all bytes from InputStream
+        let mut bytes = Vec::new();
+        loop {
+            // Read buffer: inputStream.read(buffer)
+            let buffer_size = 8192;
+            let buffer = env.new_byte_array(buffer_size)
+                .map_err(|e| format!("Failed to create buffer: {}", e))?;
+            
+            let bytes_read = env.call_method(
+                &input_stream,
+                "read",
+                "([B)I",
+                &[JValue::Object(&buffer)]
+            ).map_err(|e| format!("Failed to read from stream: {}", e))?;
+            
+            let bytes_read = bytes_read.i()
+                .map_err(|e| format!("Failed to get bytes read: {}", e))?;
+            
+            if bytes_read <= 0 {
+                break; // End of stream
+            }
+            
+            // Copy bytes from Java byte array to Rust Vec
+            let mut chunk = vec![0u8; bytes_read as usize];
+            env.get_byte_array_region(&buffer, 0, unsafe {
+                std::slice::from_raw_parts_mut(chunk.as_mut_ptr() as *mut i8, bytes_read as usize)
+            }).map_err(|e| format!("Failed to copy bytes: {}", e))?;
+            
+            bytes.extend_from_slice(&chunk);
         }
         
-        println!("Reading {} from APK...", asset_path);
+        // Close stream: inputStream.close()
+        env.call_method(&input_stream, "close", "()V", &[])
+            .map_err(|e| format!("Failed to close stream: {}", e))?;
         
-        // Get the APK path from the Android context
-        // The app's code path contains the APK location
-        use std::env;
-        let apk_path = env::var("ANDROID_APP_PATH")
-            .or_else(|_| {
-                // Fallback: try to find base.apk by reading /proc/self/maps
-                let maps = std::fs::read_to_string("/proc/self/maps")
-                    .map_err(|e| format!("Failed to read /proc/self/maps: {}", e))?;
-                
-                for line in maps.lines() {
-                    if line.contains("base.apk") {
-                        // The line format is: <address-range> <perms> <offset> <dev> <inode> <spaces> <path>
-                        // We need to extract the path which comes after a lot of spaces
-                        if let Some(path_start) = line.rfind("/data/app/") {
-                            // From the start of /data/app/ to the end of the line is the path
-                            let path = &line[path_start..].trim_end();
-                            println!("Using APK path: {}", path);
-                            return Ok(path.to_string());
-                        }
-                    }
-                }
-                Err("APK path not found in /proc/self/maps".to_string())
-            })?;
-        
-        println!("Using APK path: {}", apk_path);
-        
-        use std::fs::File;
-        use std::io::Read;
-        use zip::ZipArchive;
-        
-        let file = File::open(&apk_path)
-            .map_err(|e| format!("Failed to open APK at {}: {}", apk_path, e))?;
-        
-        let mut archive = ZipArchive::new(file)
-            .map_err(|e| format!("Failed to read APK as zip: {}", e))?;
-        
-        let asset_path_in_apk = format!("assets/_up_/homemapdata.example/{}", asset_path);
-        
-        let mut zip_file = archive.by_name(&asset_path_in_apk)
-            .map_err(|e| format!("Asset not found in APK: {} ({})", asset_path_in_apk, e))?;
-        
-        let mut buffer = Vec::new();
-        zip_file.read_to_end(&mut buffer)
-            .map_err(|e| format!("Failed to read from APK: {}", e))?;
-        
-        println!("Successfully read {} bytes for {} from APK zip", buffer.len(), asset_path);
-        Ok(BASE64_STD.encode(&buffer))
+        Ok(BASE64_STD.encode(&bytes))
     }
     
     #[cfg(not(target_os = "android"))]
@@ -1658,7 +1834,7 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
     let target_dir = PathBuf::from(&target_path);
     
     // On Android, handle content:// URIs by copying to a temporary file
-    let temp_file: Option<PathBuf>;
+    let _temp_file: Option<PathBuf>;
     let actual_backup_path: PathBuf;
     
     #[cfg(target_os = "android")]
@@ -1676,17 +1852,17 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
             std::fs::write(&temp_path, &data)
                 .map_err(|e| format!("Failed to write temp file: {}", e))?;
             
-            temp_file = Some(temp_path.clone());
+            _temp_file = Some(temp_path.clone());
             actual_backup_path = temp_path;
         } else {
-            temp_file = None;
+            _temp_file = None;
             actual_backup_path = PathBuf::from(&backup_path);
         }
     }
     
     #[cfg(not(target_os = "android"))]
     {
-        temp_file = None;
+        _temp_file = None;
         actual_backup_path = PathBuf::from(&backup_path);
     }
     
@@ -1921,7 +2097,7 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
     
     // Clean up temp file if we created one for content URI
     #[cfg(target_os = "android")]
-    if let Some(temp_path) = temp_file {
+    if let Some(temp_path) = _temp_file {
         let _ = std::fs::remove_file(&temp_path);
     }
     
@@ -2238,6 +2414,7 @@ pub fn run() {
             read_file_as_text,
             read_widget_json,
             list_directory,
+            discover_built_in_widgets,
             save_config, 
             create_config_folder,
             get_app_settings,

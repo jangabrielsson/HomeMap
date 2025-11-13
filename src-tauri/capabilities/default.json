@@ -18,6 +18,7 @@
       ]
     },
     "fs:default",
+    "fs:allow-resource-read-recursive",
     {
       "identifier": "fs:allow-read-file",
       "allow": [
@@ -26,6 +27,21 @@
         },
         {
           "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "/data/data/com.gabrielsson.homemap/**"
+        },
+        {
+          "path": "/data/user/0/com.gabrielsson.homemap/**"
         }
       ]
     },
@@ -37,6 +53,21 @@
         },
         {
           "path": "$RESOURCE/**"
+        },
+        {
+          "path": "$APPDATA/**"
+        },
+        {
+          "path": "$APPCONFIG/**"
+        },
+        {
+          "path": "$APPLOCALDATA/**"
+        },
+        {
+          "path": "/data/data/com.gabrielsson.homemap/**"
+        },
+        {
+          "path": "/data/user/0/com.gabrielsson.homemap/**"
         }
       ]
     },
