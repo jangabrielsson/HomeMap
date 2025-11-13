@@ -192,6 +192,24 @@ jobs:
           
       - name: Setup Android signing
         run: |
+          # Verify secrets are set
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_BASE64 secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" ]; then
+            echo "ERROR: ANDROID_KEYSTORE_PASSWORD secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.ANDROID_KEY_ALIAS }}" ]; then
+            echo "ERROR: ANDROID_KEY_ALIAS secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.ANDROID_KEY_PASSWORD }}" ]; then
+            echo "ERROR: ANDROID_KEY_PASSWORD secret is not set"
+            exit 1
+          fi
+          
           # Create keystore file in the app directory
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/app/homemap-release.keystore
           
@@ -202,6 +220,10 @@ jobs:
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
+          
+          echo "✓ Keystore and properties file created"
+          echo "Verifying keystore contents..."
+          keytool -list -keystore src-tauri/gen/android/app/homemap-release.keystore -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" | head -20
           
           # Patch build.gradle.kts with Python for precise injection
           python3 << 'PYTHON_SCRIPT'
