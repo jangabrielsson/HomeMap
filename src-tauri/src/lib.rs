@@ -539,7 +539,7 @@ fn sync_builtin_resources_from_template(template_dir: &PathBuf, data_dir: &PathB
 
 // Extract bundled resources on Android/iOS from APK assets  
 #[cfg(any(target_os = "android", target_os = "ios"))]
-fn extract_bundled_template(_app: &tauri::AppHandle, dest_dir: &PathBuf) -> Result<(), String> {
+fn extract_bundled_template(_app: &tauri::AppHandle, _dest_dir: &PathBuf) -> Result<(), String> {
     println!("Attempting to extract bundled template resources...");
     
     let resolver = _app.path();
@@ -762,7 +762,7 @@ fn sync_resources(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn read_image_as_base64(_app: tauri::AppHandle, image_path: String) -> Result<String, String> {
+async fn read_image_as_base64(app: tauri::AppHandle, image_path: String) -> Result<String, String> {
     // On Android, content:// URIs need to be read through ContentResolver using JNI
     #[cfg(target_os = "android")]
     {
@@ -772,7 +772,7 @@ async fn read_image_as_base64(_app: tauri::AppHandle, image_path: String) -> Res
     }
     
     // Regular file path handling for desktop platforms and non-content URIs
-    let full_path = PathBuf::from(&image_path);
+    let mut full_path = PathBuf::from(&image_path);
     
     // On Android, use Tauri's fs plugin for reading files from app storage
     #[cfg(target_os = "android")]
@@ -855,9 +855,8 @@ async fn read_image_as_base64(_app: tauri::AppHandle, image_path: String) -> Res
 
 #[cfg(target_os = "android")]
 fn read_android_content_uri(uri: &str) -> Result<String, String> {
-    use jni::objects::{JObject, JString};
+    use jni::objects::JObject;
     use jni::JavaVM;
-    use std::io::Read;
     
     // Get the Java VM and JNI environment
     let ctx = ndk_context::android_context();
@@ -1510,7 +1509,10 @@ fn save_temp_file(file_name: String, data: Vec<u8>) -> Result<String, String> {
 // Read bundled asset file and return as base64
 // Used to access files from APK assets that aren't accessible via fetch()
 #[tauri::command]
-fn read_bundled_asset(app: tauri::AppHandle, asset_path: String) -> Result<String, String> {
+fn read_bundled_asset(
+    #[allow(unused_variables)] app: tauri::AppHandle,
+    asset_path: String
+) -> Result<String, String> {
     use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64_STD;
     
@@ -1518,7 +1520,6 @@ fn read_bundled_asset(app: tauri::AppHandle, asset_path: String) -> Result<Strin
     {
         use jni::JavaVM;
         use jni::objects::{JObject, JValue};
-        use std::io::Read;
         
         // Get Java VM and attach to current thread
         let ctx = ndk_context::android_context();
