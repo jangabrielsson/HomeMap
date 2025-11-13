@@ -298,17 +298,30 @@ jobs:
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
           
-      - name: Verify APK creation
+      - name: Verify and rename APK
         run: |
           echo "Searching for built APK files..."
           find src-tauri/gen/android -name "*.apk" -type f
           echo ""
+          
+          # Get version from tag (remove 'v' prefix)
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          
           if [ -f "src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk" ]; then
             echo "✓ Found ARM64 APK (signed)"
             ls -lh src-tauri/gen/android/app/build/outputs/apk/arm64/release/
+            # Rename to descriptive name
+            mv src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk \
+               src-tauri/gen/android/app/build/outputs/apk/arm64/release/HomeMap_${VERSION}_android-arm64.apk
+            echo "Renamed to: HomeMap_${VERSION}_android-arm64.apk"
           elif [ -f "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk" ]; then
             echo "✓ Found universal APK (signed)"
             ls -lh src-tauri/gen/android/app/build/outputs/apk/universal/release/
+            # Rename to descriptive name
+            mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk \
+               src-tauri/gen/android/app/build/outputs/apk/universal/release/HomeMap_${VERSION}_android.apk
+            echo "Renamed to: HomeMap_${VERSION}_android.apk"
           else
             echo "❌ No signed APK found at expected locations"
             exit 1
@@ -318,7 +331,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/arm64/release/app-arm64-release.apk
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            src-tauri/gen/android/app/build/outputs/apk/arm64/release/HomeMap_*_android-arm64.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/HomeMap_*_android.apk
           tag_name: ${{ github.ref_name }}
           fail_on_unmatched_files: false
