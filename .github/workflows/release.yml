@@ -207,33 +207,33 @@ jobs:
           echo "=== Post-init verification ==="
           echo "Checking if gen/android was created..."
           ls -la src-tauri/gen/android/ | head -5
-          echo ""
-          echo "CRITICAL: Checking if assets were copied to gen/android..."
-          if [ -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
-            echo "✓ Assets directory exists in gen/android"
-            ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
-            echo "✓ Found $ASSET_FILE_COUNT asset files"
-            ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
-          else
-            echo "⚠️  WARNING: Assets were NOT copied by init (Tauri CLI bug in CI?)"
-            echo "Manually copying resources as workaround..."
-            echo ""
-            
-            # Create assets directory structure
-            mkdir -p src-tauri/gen/android/app/src/main/assets/_up_
-            
-            # Copy homemapdata.example resources
-            cp -r homemapdata.example src-tauri/gen/android/app/src/main/assets/_up_/
-            
-            echo "✓ Manually copied resources"
-            ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
-            echo "✓ Found $ASSET_FILE_COUNT asset files after manual copy"
-            ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
-          fi
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
+      
+      - name: Manually copy resources (Tauri CLI workaround)
+        run: |
+          echo "=== Manually copying resources to gen/android ==="
+          echo "This is a workaround for Tauri CLI not copying resources on Linux"
+          echo ""
+          
+          # Create assets directory structure
+          mkdir -p src-tauri/gen/android/app/src/main/assets/_up_
+          
+          # Copy homemapdata.example resources
+          echo "Copying homemapdata.example..."
+          cp -rv homemapdata.example src-tauri/gen/android/app/src/main/assets/_up_/ | head -20
+          
+          echo ""
+          ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
+          echo "✓ Copied $ASSET_FILE_COUNT asset files"
+          echo ""
+          echo "Contents of assets directory:"
+          ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
+          echo ""
+          echo "Sample files:"
+          find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | head -5
           
       - name: Setup Android signing
         run: |
@@ -335,6 +335,24 @@ jobs:
           
           print("✓ Signing configuration added to build.gradle.kts")
           PYTHON_SCRIPT
+      
+      - name: Verify assets before build
+        run: |
+          echo "=== Verifying assets are present before build ==="
+          if [ -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
+            ASSET_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
+            echo "✓ Found $ASSET_COUNT asset files in gen/android before build"
+          else
+            echo "❌ ERROR: Assets directory disappeared before build!"
+            exit 1
+          fi
+      
+      - name: Clean Gradle cache
+        run: |
+          echo "=== Cleaning Gradle cache to ensure fresh asset processing ==="
+          cd src-tauri/gen/android
+          ./gradlew clean
+          echo "✓ Gradle cache cleaned"
           
       - name: Build Android APK
         run: cargo tauri android build --target aarch64 --verbose
