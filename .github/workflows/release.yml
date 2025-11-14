@@ -342,20 +342,19 @@ jobs:
           if [ -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
             ASSET_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
             echo "✓ Found $ASSET_COUNT asset files in gen/android before build"
+            echo ""
+            echo "Asset directory contents:"
+            ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/
           else
             echo "❌ ERROR: Assets directory disappeared before build!"
             exit 1
           fi
-      
-      - name: Clean Gradle cache
-        run: |
-          echo "=== Cleaning Gradle cache to ensure fresh asset processing ==="
-          cd src-tauri/gen/android
-          ./gradlew clean
-          echo "✓ Gradle cache cleaned"
           
       - name: Build Android APK
-        run: cargo tauri android build --target aarch64 --verbose
+        run: |
+          echo "=== Building Android APK ==="
+          echo "NOTE: Gradle will process assets from src-tauri/gen/android/app/src/main/assets/"
+          cargo tauri android build --target aarch64 --verbose
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
