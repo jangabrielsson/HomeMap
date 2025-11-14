@@ -385,12 +385,22 @@ jobs:
           ASSET_COUNT=$(find assets/_up_/homemapdata.example -type f | wc -l | tr -d ' ')
           echo "✓ Injected $ASSET_COUNT asset files into APK"
           
-          # Re-zip the APK (store mode, no compression for alignment)
+          # Remove old signature (APK was already signed by Gradle)
+          echo "Removing old signature..."
+          rm -rf META-INF/*.SF META-INF/*.RSA META-INF/*.DSA META-INF/MANIFEST.MF 2>/dev/null || true
+          
+          # Re-zip the APK (store mode, no compression)
           echo "Re-packaging APK..."
           rm -f "$APK_PATH"
           zip -0 -r "$APK_PATH" .
           
           cd "$WORKSPACE_DIR"
+          
+          # Align the APK (required before signing)
+          echo "Aligning APK..."
+          APK_ALIGNED="$WORKSPACE_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk"
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -f -p 4 "$APK_PATH" "$APK_ALIGNED"
+          mv "$APK_ALIGNED" "$APK_PATH"
           
           # Sign the modified APK
           echo "Signing modified APK..."
@@ -402,6 +412,9 @@ jobs:
             "$APK_PATH"
           
           echo "✓ APK signed successfully"
+          
+          # Verify the signature
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner verify "$APK_PATH" && echo "✓ APK signature verified"
           
           echo ""
           echo "=== Post-build verification ==="
