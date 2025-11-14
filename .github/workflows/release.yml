@@ -185,6 +185,17 @@ jobs:
           if [ ! -f ~/.cargo/bin/tauri ]; then
             cargo install tauri-cli --version "^2.0.0"
           fi
+      
+      - name: Initialize Android project
+        run: |
+          echo "Initializing Android project (without --ci flag to preserve resource bundling)..."
+          cargo tauri android init
+          echo "Verifying resources are still present..."
+          ls -la homemapdata.example/widgets/built-in/ | head -10
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
+          NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
           
       - name: Setup Android signing
         run: |
