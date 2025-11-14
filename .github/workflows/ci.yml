@@ -1,12 +1,15 @@
 name: CI
 
+# Disabled - full tests run during release workflow anyway
+# on:
+#   push:
+#     branches: [ main ]
+#     tags-ignore:
+#       - '**'
+#   pull_request:
+#     branches: [ main ]
 on:
-  push:
-    branches: [ main ]
-    tags-ignore:
-      - '**'
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:  # Only allow manual trigger
 
 jobs:
   desktop-test:
