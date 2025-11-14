@@ -324,13 +324,23 @@ jobs:
           cp -r src-tauri/icons/android/values src-tauri/gen/android/app/src/main/res/
           
           ASSET_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
-          echo "✓ Copied $ASSET_COUNT asset files"
-          echo "✓ Copied Android icons"
+          echo "✓ Copied $ASSET_COUNT asset files to src/main/assets"
+          echo "✓ Copied Android icons to src/main/res"
+          echo ""
+          echo "Verifying copy succeeded:"
+          ls -la src-tauri/gen/android/app/src/main/assets/_up_/ || echo "ERROR: assets directory not found!"
           echo ""
           
           # Now build - resources are in place
           echo "Running cargo tauri android build..."
           cargo tauri android build --target aarch64 --verbose
+          
+          echo ""
+          echo "=== Post-build verification ==="
+          echo "Checking if Gradle processed our assets..."
+          if [ -d "src-tauri/gen/android/app/build/intermediates/assets" ]; then
+            find src-tauri/gen/android/app/build/intermediates/assets -name "_up_" -type d || echo "No _up_ directory in intermediates"
+          fi
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
