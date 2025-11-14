@@ -352,14 +352,19 @@ jobs:
           
           echo ""
           echo "=== Repackaging with assets ==="
-          echo "Assets are now in place, rebuilding to include them..."
+          echo "Assets are now in place, repackaging APK..."
           
           # Touch assets to update timestamps
           find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f -exec touch {} \;
           
-          # Force re-merge and re-package by calling Gradle directly
+          # Delete only the asset merge cache and the final APK/AAB, keeping Rust libs
+          rm -rf src-tauri/gen/android/app/build/intermediates/assets/universalRelease/mergeUniversalReleaseAssets
+          rm -f src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+          rm -f src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+          
+          # Re-merge assets and repackage APK (without rebuilding Rust)
           cd src-tauri/gen/android
-          ./gradlew :app:clean :app:mergeUniversalReleaseAssets :app:packageUniversalRelease --rerun-tasks
+          ./gradlew :app:mergeUniversalReleaseAssets :app:packageUniversalReleaseResources :app:packageUniversalRelease --rerun-tasks
           cd ../../..
           
           echo ""
