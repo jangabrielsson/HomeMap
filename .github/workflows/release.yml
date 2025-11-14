@@ -346,17 +346,21 @@ jobs:
           echo "Total files: $ASSET_COUNT"
           echo ""
           
-          # CRITICAL: Force Gradle to recognize new assets by cleaning merge task cache
-          echo "=== Invalidating Gradle asset cache ==="
-          if [ -d "src-tauri/gen/android/app/build/intermediates/assets" ]; then
-            echo "Removing cached asset intermediates to force Gradle to re-merge..."
-            rm -rf src-tauri/gen/android/app/build/intermediates/assets
-            echo "✓ Cache cleared"
-          fi
-          
-          # Now build with resources in place
-          echo "=== Building Android APK ==="
+          # Build first (will create empty assets)
+          echo "=== Building Android APK (first pass) ==="
           cargo tauri android build --target aarch64 --verbose
+          
+          echo ""
+          echo "=== Repackaging with assets ==="
+          echo "Assets are now in place, rebuilding to include them..."
+          
+          # Touch assets to update timestamps
+          find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f -exec touch {} \;
+          
+          # Force re-merge and re-package by calling Gradle directly
+          cd src-tauri/gen/android
+          ./gradlew :app:clean :app:mergeUniversalReleaseAssets :app:packageUniversalRelease --rerun-tasks
+          cd ../../..
           
           echo ""
           echo "=== Post-build verification ==="
