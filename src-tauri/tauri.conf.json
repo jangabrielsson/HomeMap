@@ -44,7 +44,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../homemapdata.example"
+      "../homemapdata.example/"
     ],
     "macOS": {
       "signingIdentity": "-"

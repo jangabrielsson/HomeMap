@@ -346,40 +346,56 @@ jobs:
           echo "Total files: $ASSET_COUNT"
           echo ""
           
-          # Build first (Rust will be compiled, APK created without bundled assets)
-          echo "=== Building Android APK (first pass) ==="
+          # Check if resources were already copied by tauri init (with trailing slash fix)
+          echo "=== Checking if Tauri CLI copied resources ==="
+          if [ -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
+            TAURI_ASSET_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l | tr -d ' ')
+            echo "✓ Tauri CLI copied resources! Found $TAURI_ASSET_COUNT files"
+            echo "The trailing slash fix worked - no manual workaround needed"
+          else
+            echo "⚠ Tauri CLI still not copying resources on Linux"
+          fi
+          
+          echo ""
+          echo "=== Building Android APK ==="
           cargo tauri android build --target aarch64 --verbose
           
           echo ""
           echo "=== Injecting assets into APK ==="
           
-          APK_PATH="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
-          TEMP_DIR="src-tauri/gen/android/app/build/apk-repack"
+          # Use absolute paths to avoid confusion
+          WORKSPACE_DIR="$(pwd)"
+          APK_PATH="$WORKSPACE_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          TEMP_DIR="$WORKSPACE_DIR/src-tauri/gen/android/app/build/apk-repack"
+          ASSETS_SOURCE="$WORKSPACE_DIR/src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example"
+          KEYSTORE_PATH="$WORKSPACE_DIR/src-tauri/gen/android/app/homemap-release.keystore"
           
           # Unzip the APK
+          echo "Extracting APK..."
           mkdir -p "$TEMP_DIR"
           cd "$TEMP_DIR"
-          unzip -q "../../../../$APK_PATH"
+          unzip -q "$APK_PATH"
           
           # Copy assets into the extracted APK
           echo "Copying assets into extracted APK..."
           mkdir -p assets/_up_
-          cp -r ../../../../../app/src/main/assets/_up_/homemapdata.example assets/_up_/
+          cp -r "$ASSETS_SOURCE" assets/_up_/
           
           # Count injected files
           ASSET_COUNT=$(find assets/_up_/homemapdata.example -type f | wc -l | tr -d ' ')
           echo "✓ Injected $ASSET_COUNT asset files into APK"
           
           # Re-zip the APK (store mode, no compression for alignment)
-          rm -f "../../../../$APK_PATH"
-          zip -0 -r "../../../../$APK_PATH" .
+          echo "Re-packaging APK..."
+          rm -f "$APK_PATH"
+          zip -0 -r "$APK_PATH" .
           
-          cd ../../../../..
+          cd "$WORKSPACE_DIR"
           
           # Sign the modified APK
           echo "Signing modified APK..."
           $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
-            --ks src-tauri/gen/android/app/homemap-release.keystore \
+            --ks "$KEYSTORE_PATH" \
             --ks-key-alias homemap \
             --ks-pass pass:"$ANDROID_KEYSTORE_PASSWORD" \
             --key-pass pass:"$ANDROID_KEY_PASSWORD" \
