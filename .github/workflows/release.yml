@@ -186,9 +186,9 @@ jobs:
             cargo install tauri-cli --version "^2.0.0"
           fi
       
-      - name: Initialize Android project
+      - name: Pre-build verification
         run: |
-          echo "=== Pre-init verification ==="
+          echo "=== Pre-build verification ==="
           echo "Checking tauri.conf.json resources config..."
           grep -A 5 '"resources"' src-tauri/tauri.conf.json
           echo ""
@@ -200,50 +200,6 @@ jobs:
           echo ""
           echo "Verifying widgets exist..."
           ls -la homemapdata.example/widgets/built-in/ | wc -l
-          echo ""
-          echo "=== Initializing Android project ==="
-          cargo tauri android init
-          echo ""
-          echo "=== Post-init verification ==="
-          echo "Checking if gen/android was created..."
-          ls -la src-tauri/gen/android/ | head -5
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
-          NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
-      
-      - name: Manually copy resources and icons (Tauri CLI workaround)
-        run: |
-          echo "=== Manually copying resources and icons to gen/android ==="
-          echo "This is a workaround for Tauri CLI not copying resources on Linux"
-          echo ""
-          
-          # Create assets directory structure
-          mkdir -p src-tauri/gen/android/app/src/main/assets/_up_
-          
-          # Copy homemapdata.example resources
-          echo "Copying homemapdata.example assets..."
-          cp -rv homemapdata.example src-tauri/gen/android/app/src/main/assets/_up_/ | head -20
-          
-          echo ""
-          ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
-          echo "✓ Copied $ASSET_FILE_COUNT asset files"
-          echo ""
-          
-          # Copy Android icons (mipmap resources)
-          echo "Copying Android app icons..."
-          mkdir -p src-tauri/gen/android/app/src/main/res
-          cp -rv src-tauri/icons/android/mipmap-* src-tauri/gen/android/app/src/main/res/ | head -10
-          cp -rv src-tauri/icons/android/values src-tauri/gen/android/app/src/main/res/
-          
-          echo ""
-          echo "✓ Copied Android icons to all density folders"
-          echo ""
-          echo "Verifying icon resources:"
-          ls -la src-tauri/gen/android/app/src/main/res/ | grep mipmap
-          echo ""
-          echo "Sample icon files:"
-          ls -la src-tauri/gen/android/app/src/main/res/mipmap-hdpi/
           
       - name: Setup Android signing
         run: |
@@ -345,25 +301,35 @@ jobs:
           
           print("✓ Signing configuration added to build.gradle.kts")
           PYTHON_SCRIPT
-      
-      - name: Verify assets before build
-        run: |
-          echo "=== Verifying assets are present before build ==="
-          if [ -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
-            ASSET_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
-            echo "✓ Found $ASSET_COUNT asset files in gen/android before build"
-            echo ""
-            echo "Asset directory contents:"
-            ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/
-          else
-            echo "❌ ERROR: Assets directory disappeared before build!"
-            exit 1
-          fi
           
-      - name: Build Android APK
+      - name: Build Android APK with resource workaround
         run: |
-          echo "=== Building Android APK ==="
-          echo "NOTE: Gradle will process assets from src-tauri/gen/android/app/src/main/assets/"
+          echo "=== Building Android APK with inline resource copy ==="
+          echo "Workaround for Tauri CLI not copying resources on Linux"
+          echo ""
+          
+          # Run init to create project structure
+          echo "Running cargo tauri android init..."
+          cargo tauri android init
+          echo "✓ Init completed"
+          echo ""
+          
+          # IMMEDIATELY copy resources before anything can overwrite
+          echo "Copying resources and icons..."
+          mkdir -p src-tauri/gen/android/app/src/main/assets/_up_
+          cp -r homemapdata.example src-tauri/gen/android/app/src/main/assets/_up_/
+          
+          mkdir -p src-tauri/gen/android/app/src/main/res
+          cp -r src-tauri/icons/android/mipmap-* src-tauri/gen/android/app/src/main/res/
+          cp -r src-tauri/icons/android/values src-tauri/gen/android/app/src/main/res/
+          
+          ASSET_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
+          echo "✓ Copied $ASSET_COUNT asset files"
+          echo "✓ Copied Android icons"
+          echo ""
+          
+          # Now build - resources are in place
+          echo "Running cargo tauri android build..."
           cargo tauri android build --target aarch64 --verbose
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
