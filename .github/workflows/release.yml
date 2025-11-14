@@ -212,9 +212,9 @@ jobs:
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
       
-      - name: Manually copy resources (Tauri CLI workaround)
+      - name: Manually copy resources and icons (Tauri CLI workaround)
         run: |
-          echo "=== Manually copying resources to gen/android ==="
+          echo "=== Manually copying resources and icons to gen/android ==="
           echo "This is a workaround for Tauri CLI not copying resources on Linux"
           echo ""
           
@@ -222,18 +222,28 @@ jobs:
           mkdir -p src-tauri/gen/android/app/src/main/assets/_up_
           
           # Copy homemapdata.example resources
-          echo "Copying homemapdata.example..."
+          echo "Copying homemapdata.example assets..."
           cp -rv homemapdata.example src-tauri/gen/android/app/src/main/assets/_up_/ | head -20
           
           echo ""
           ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
           echo "✓ Copied $ASSET_FILE_COUNT asset files"
           echo ""
-          echo "Contents of assets directory:"
-          ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
+          
+          # Copy Android icons (mipmap resources)
+          echo "Copying Android app icons..."
+          mkdir -p src-tauri/gen/android/app/src/main/res
+          cp -rv src-tauri/icons/android/mipmap-* src-tauri/gen/android/app/src/main/res/ | head -10
+          cp -rv src-tauri/icons/android/values src-tauri/gen/android/app/src/main/res/
+          
           echo ""
-          echo "Sample files:"
-          find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | head -5
+          echo "✓ Copied Android icons to all density folders"
+          echo ""
+          echo "Verifying icon resources:"
+          ls -la src-tauri/gen/android/app/src/main/res/ | grep mipmap
+          echo ""
+          echo "Sample icon files:"
+          ls -la src-tauri/gen/android/app/src/main/res/mipmap-hdpi/
           
       - name: Setup Android signing
         run: |
