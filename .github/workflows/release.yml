@@ -346,6 +346,14 @@ jobs:
           echo "Total files: $ASSET_COUNT"
           echo ""
           
+          # CRITICAL: Force Gradle to recognize new assets by cleaning merge task cache
+          echo "=== Invalidating Gradle asset cache ==="
+          if [ -d "src-tauri/gen/android/app/build/intermediates/assets" ]; then
+            echo "Removing cached asset intermediates to force Gradle to re-merge..."
+            rm -rf src-tauri/gen/android/app/build/intermediates/assets
+            echo "✓ Cache cleared"
+          fi
+          
           # Now build with resources in place
           echo "=== Building Android APK ==="
           cargo tauri android build --target aarch64 --verbose
