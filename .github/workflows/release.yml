@@ -215,11 +215,20 @@ jobs:
             echo "✓ Found $ASSET_FILE_COUNT asset files"
             ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
           else
-            echo "❌ ERROR: Assets were NOT copied to gen/android after init!"
-            echo "This means resources bundling will fail."
-            echo "Checking what IS in assets directory:"
-            ls -la src-tauri/gen/android/app/src/main/assets/ || echo "No assets directory at all!"
-            exit 1
+            echo "⚠️  WARNING: Assets were NOT copied by init (Tauri CLI bug in CI?)"
+            echo "Manually copying resources as workaround..."
+            echo ""
+            
+            # Create assets directory structure
+            mkdir -p src-tauri/gen/android/app/src/main/assets/_up_
+            
+            # Copy homemapdata.example resources
+            cp -r homemapdata.example src-tauri/gen/android/app/src/main/assets/_up_/
+            
+            echo "✓ Manually copied resources"
+            ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
+            echo "✓ Found $ASSET_FILE_COUNT asset files after manual copy"
+            ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
           fi
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
