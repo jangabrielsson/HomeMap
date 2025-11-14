@@ -332,8 +332,18 @@ jobs:
           echo "✓ Copied $ASSET_COUNT asset files"
           echo "✓ Copied Android icons"
           echo ""
-          echo "Verifying assets in place:"
+          echo "=== CRITICAL: Verifying assets exist before build ==="
+          if [ ! -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
+            echo "❌ ERROR: homemapdata.example directory doesn't exist after copy!"
+            echo "Directory structure:"
+            ls -R src-tauri/gen/android/app/src/main/assets/
+            exit 1
+          fi
+          echo "Contents of _up_:"
           ls -la src-tauri/gen/android/app/src/main/assets/_up_/
+          echo "Sample files in homemapdata.example:"
+          find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | head -10
+          echo "Total files: $ASSET_COUNT"
           echo ""
           
           # Now build with resources in place
@@ -344,7 +354,14 @@ jobs:
           echo "=== Post-build verification ==="
           echo "Checking if Gradle processed our assets..."
           if [ -d "src-tauri/gen/android/app/build/intermediates/assets" ]; then
-            find src-tauri/gen/android/app/build/intermediates/assets -name "_up_" -type d || echo "No _up_ directory in intermediates"
+            echo "Intermediates assets directory exists"
+            find src-tauri/gen/android/app/build/intermediates/assets -type d -name "_up_" || echo "❌ No _up_ directory in intermediates"
+            if [ -d "src-tauri/gen/android/app/build/intermediates/assets/universalRelease/mergeUniversalReleaseAssets/_up_" ]; then
+              echo "✓ _up_ directory found in merge step"
+              ls -la src-tauri/gen/android/app/build/intermediates/assets/universalRelease/mergeUniversalReleaseAssets/_up_/
+            fi
+          else
+            echo "❌ No intermediates/assets directory found"
           fi
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
