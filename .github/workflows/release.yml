@@ -385,31 +385,30 @@ jobs:
           ASSET_COUNT=$(find assets/_up_/homemapdata.example -type f | wc -l | tr -d ' ')
           echo "✓ Injected $ASSET_COUNT asset files into APK"
           
-          # Remove old signature (APK was already signed by Gradle)
-          echo "Removing old signature..."
-          rm -rf META-INF/*.SF META-INF/*.RSA META-INF/*.DSA META-INF/MANIFEST.MF 2>/dev/null || true
-          
-          # Re-zip the APK (store mode, no compression)
+          # Re-zip the APK as UNSIGNED (store mode, no compression)
           echo "Re-packaging APK..."
-          rm -f "$APK_PATH"
-          zip -0 -r "$APK_PATH" .
+          APK_UNSIGNED="$WORKSPACE_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk"
+          zip -0 -r "$APK_UNSIGNED" .
           
           cd "$WORKSPACE_DIR"
           
-          # Align the APK (required before signing)
+          # Align the unsigned APK (required before signing)
           echo "Aligning APK..."
           APK_ALIGNED="$WORKSPACE_DIR/src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk"
-          $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -f -p 4 "$APK_PATH" "$APK_ALIGNED"
-          mv "$APK_ALIGNED" "$APK_PATH"
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -f -p 4 "$APK_UNSIGNED" "$APK_ALIGNED"
           
-          # Sign the modified APK
+          # Sign the aligned APK (output to final path)
           echo "Signing modified APK..."
           $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
             --ks "$KEYSTORE_PATH" \
             --ks-key-alias homemap \
             --ks-pass pass:"$ANDROID_KEYSTORE_PASSWORD" \
             --key-pass pass:"$ANDROID_KEY_PASSWORD" \
-            "$APK_PATH"
+            --in "$APK_ALIGNED" \
+            --out "$APK_PATH"
+          
+          # Clean up temporary files
+          rm -f "$APK_UNSIGNED" "$APK_ALIGNED"
           
           echo "✓ APK signed successfully"
           
