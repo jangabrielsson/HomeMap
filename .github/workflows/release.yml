@@ -170,6 +170,9 @@ jobs:
         run: |
           chmod +x scripts/generate-asset-manifest.sh
           ./scripts/generate-asset-manifest.sh
+          echo "Asset manifest generated, verifying..."
+          ls -la homemapdata.example/asset-manifest.json
+          cat homemapdata.example/asset-manifest.json | head -20
           
       - name: Cache Tauri CLI
         uses: actions/cache@v4
@@ -182,13 +185,6 @@ jobs:
           if [ ! -f ~/.cargo/bin/tauri ]; then
             cargo install tauri-cli --version "^2.0.0"
           fi
-          
-      - name: Initialize Android project
-        run: cargo tauri android init --ci
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
-          NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
           
       - name: Setup Android signing
         run: |
@@ -297,6 +293,25 @@ jobs:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
           NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
+      
+      - name: Verify APK contains bundled assets
+        run: |
+          echo "Verifying assets are bundled in APK..."
+          APK_FILE=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" -type f | grep -E "(release|signed)" | head -1)
+          if [ -n "$APK_FILE" ]; then
+            echo "Checking APK: $APK_FILE"
+            unzip -l "$APK_FILE" | grep -E "assets/_up_/homemapdata.example" | head -20
+            ASSET_COUNT=$(unzip -l "$APK_FILE" | grep -c "assets/_up_/homemapdata.example" || echo "0")
+            echo "Found $ASSET_COUNT asset files in APK"
+            if [ "$ASSET_COUNT" -lt "40" ]; then
+              echo "❌ ERROR: Expected at least 40 asset files, found only $ASSET_COUNT"
+              echo "This means assets were not properly bundled!"
+              exit 1
+            fi
+            echo "✓ Assets properly bundled in APK"
+          else
+            echo "⚠️  Could not find APK to verify"
+          fi
           
       - name: Verify and rename APK
         run: |

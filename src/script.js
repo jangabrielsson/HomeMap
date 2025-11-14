@@ -1419,9 +1419,17 @@ You can also configure floor plans and manage devices once connected!`;
             
             // Fetch manifest from bundled assets using Rust command (embedded at compile time)
             console.log('Reading asset-manifest.json from bundled assets...');
-            const manifestB64 = await this.invoke('read_bundled_asset', { 
-                assetPath: 'asset-manifest.json' 
-            });
+            let manifestB64;
+            try {
+                manifestB64 = await this.invoke('read_bundled_asset', { 
+                    assetPath: 'asset-manifest.json' 
+                });
+            } catch (manifestError) {
+                const errorMsg = `CRITICAL: Failed to read asset-manifest.json from bundled resources. This means assets were not properly bundled in the APK. Error: ${manifestError.message || manifestError}`;
+                console.error(errorMsg);
+                alert(errorMsg);
+                throw new Error(errorMsg);
+            }
             
             try {
                 const manifestJson = atob(manifestB64);
@@ -1462,17 +1470,32 @@ You can also configure floor plans and manage devices once connected!`;
             
             console.log(`Asset copy complete: ${successCount} succeeded, ${errorCount} failed`);
             
+            if (errorCount > 0) {
+                const errorMsg = `Warning: ${errorCount} assets failed to copy. First error: ${firstError}`;
+                console.warn(errorMsg);
+                alert(errorMsg);
+            }
+            
             // Store version to avoid re-copying
             if (successCount > 0) {
                 localStorage.setItem(versionKey, manifestVersion);
+            } else {
+                const errorMsg = 'CRITICAL: No assets were successfully copied. App may not function correctly.';
+                console.error(errorMsg);
+                alert(errorMsg);
+                throw new Error(errorMsg);
             }
             } catch (parseError) {
-                console.error('Failed to parse manifest:', parseError);
+                const errorMsg = `Failed to parse asset manifest: ${parseError.message || parseError}`;
+                console.error(errorMsg);
+                alert(errorMsg);
+                throw parseError;
             }
             
         } catch (error) {
             console.error('Failed to copy bundled assets:', error);
-            // Don't block app startup on asset copy failure
+            alert(`Asset copy failed: ${error.message || error}`);
+            throw error; // Re-throw to prevent app from starting with missing assets
         }
     }
 
