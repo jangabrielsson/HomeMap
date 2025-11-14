@@ -207,6 +207,20 @@ jobs:
           echo "=== Post-init verification ==="
           echo "Checking if gen/android was created..."
           ls -la src-tauri/gen/android/ | head -5
+          echo ""
+          echo "CRITICAL: Checking if assets were copied to gen/android..."
+          if [ -d "src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example" ]; then
+            echo "✓ Assets directory exists in gen/android"
+            ASSET_FILE_COUNT=$(find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f | wc -l)
+            echo "✓ Found $ASSET_FILE_COUNT asset files"
+            ls -la src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example/ | head -10
+          else
+            echo "❌ ERROR: Assets were NOT copied to gen/android after init!"
+            echo "This means resources bundling will fail."
+            echo "Checking what IS in assets directory:"
+            ls -la src-tauri/gen/android/app/src/main/assets/ || echo "No assets directory at all!"
+            exit 1
+          fi
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
@@ -328,12 +342,12 @@ jobs:
             echo "Checking APK: $APK_FILE"
             echo ""
             echo "All assets in APK:"
-            unzip -l "$APK_FILE" | grep "assets/"
+            unzip -l "$APK_FILE" | grep "assets/" || echo "(No assets found)"
             echo ""
             echo "Looking for homemapdata.example assets:"
-            unzip -l "$APK_FILE" | grep -E "assets/_up_/homemapdata.example" | head -20
-            ASSET_COUNT=$(unzip -l "$APK_FILE" | grep -c "assets/_up_/homemapdata.example" || echo "0")
+            unzip -l "$APK_FILE" | grep -E "assets/_up_/homemapdata.example" | head -20 || echo "(None found)"
             echo ""
+            ASSET_COUNT=$(unzip -l "$APK_FILE" | grep -c "assets/_up_/homemapdata.example" || true)
             echo "Found $ASSET_COUNT homemapdata.example asset files in APK"
             if [ "$ASSET_COUNT" -lt "40" ]; then
               echo ""
