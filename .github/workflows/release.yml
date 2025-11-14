@@ -346,26 +346,46 @@ jobs:
           echo "Total files: $ASSET_COUNT"
           echo ""
           
-          # Build first (will create empty assets)
+          # Build first (Rust will be compiled, APK created without bundled assets)
           echo "=== Building Android APK (first pass) ==="
           cargo tauri android build --target aarch64 --verbose
           
           echo ""
-          echo "=== Repackaging with assets ==="
-          echo "Assets are now in place, repackaging APK..."
+          echo "=== Injecting assets into APK ==="
           
-          # Touch assets to update timestamps
-          find src-tauri/gen/android/app/src/main/assets/_up_/homemapdata.example -type f -exec touch {} \;
+          APK_PATH="src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk"
+          TEMP_DIR="src-tauri/gen/android/app/build/apk-repack"
           
-          # Delete only the asset merge cache and the final APK/AAB, keeping Rust libs
-          rm -rf src-tauri/gen/android/app/build/intermediates/assets/universalRelease/mergeUniversalReleaseAssets
-          rm -f src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
-          rm -f src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+          # Unzip the APK
+          mkdir -p "$TEMP_DIR"
+          cd "$TEMP_DIR"
+          unzip -q "../../../../$APK_PATH"
           
-          # Re-merge assets and repackage APK (without rebuilding Rust)
-          cd src-tauri/gen/android
-          ./gradlew :app:mergeUniversalReleaseAssets :app:packageUniversalReleaseResources :app:packageUniversalRelease --rerun-tasks
-          cd ../../..
+          # Copy assets into the extracted APK
+          echo "Copying assets into extracted APK..."
+          mkdir -p assets/_up_
+          cp -r ../../../../../app/src/main/assets/_up_/homemapdata.example assets/_up_/
+          
+          # Count injected files
+          ASSET_COUNT=$(find assets/_up_/homemapdata.example -type f | wc -l | tr -d ' ')
+          echo "✓ Injected $ASSET_COUNT asset files into APK"
+          
+          # Re-zip the APK (store mode, no compression for alignment)
+          rm -f "../../../../$APK_PATH"
+          zip -0 -r "../../../../$APK_PATH" .
+          
+          cd ../../../../..
+          
+          # Sign the modified APK
+          echo "Signing modified APK..."
+          $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
+            --ks src-tauri/gen/android/app/homemap-release.keystore \
+            --ks-key-alias homemap \
+            --ks-pass pass:"$ANDROID_KEYSTORE_PASSWORD" \
+            --key-pass pass:"$ANDROID_KEY_PASSWORD" \
+            "$APK_PATH"
+          
+          echo "✓ APK signed successfully"
           
           echo ""
           echo "=== Post-build verification ==="
