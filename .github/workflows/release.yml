@@ -188,10 +188,25 @@ jobs:
       
       - name: Initialize Android project
         run: |
-          echo "Initializing Android project (without --ci flag to preserve resource bundling)..."
+          echo "=== Pre-init verification ==="
+          echo "Checking tauri.conf.json resources config..."
+          grep -A 5 '"resources"' src-tauri/tauri.conf.json
+          echo ""
+          echo "Checking tauri.android.conf.json resources config..."
+          grep -A 5 '"resources"' src-tauri/tauri.android.conf.json
+          echo ""
+          echo "Verifying homemapdata.example exists..."
+          ls -la homemapdata.example/ | head -10
+          echo ""
+          echo "Verifying widgets exist..."
+          ls -la homemapdata.example/widgets/built-in/ | wc -l
+          echo ""
+          echo "=== Initializing Android project ==="
           cargo tauri android init
-          echo "Verifying resources are still present..."
-          ls -la homemapdata.example/widgets/built-in/ | head -10
+          echo ""
+          echo "=== Post-init verification ==="
+          echo "Checking if gen/android was created..."
+          ls -la src-tauri/gen/android/ | head -5
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
@@ -307,21 +322,33 @@ jobs:
       
       - name: Verify APK contains bundled assets
         run: |
-          echo "Verifying assets are bundled in APK..."
-          APK_FILE=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" -type f | grep -E "(release|signed)" | head -1)
+          echo "=== Verifying assets are bundled in APK ==="
+          APK_FILE=$(find src-tauri/gen/android/app/build/outputs/apk -name "*.apk" -type f | head -1)
           if [ -n "$APK_FILE" ]; then
             echo "Checking APK: $APK_FILE"
+            echo ""
+            echo "All assets in APK:"
+            unzip -l "$APK_FILE" | grep "assets/"
+            echo ""
+            echo "Looking for homemapdata.example assets:"
             unzip -l "$APK_FILE" | grep -E "assets/_up_/homemapdata.example" | head -20
             ASSET_COUNT=$(unzip -l "$APK_FILE" | grep -c "assets/_up_/homemapdata.example" || echo "0")
-            echo "Found $ASSET_COUNT asset files in APK"
+            echo ""
+            echo "Found $ASSET_COUNT homemapdata.example asset files in APK"
             if [ "$ASSET_COUNT" -lt "40" ]; then
+              echo ""
               echo "❌ ERROR: Expected at least 40 asset files, found only $ASSET_COUNT"
               echo "This means assets were not properly bundled!"
+              echo ""
+              echo "Checking tauri configs:"
+              grep -A 5 '"resources"' src-tauri/tauri.conf.json
+              grep -A 5 '"resources"' src-tauri/tauri.android.conf.json
               exit 1
             fi
             echo "✓ Assets properly bundled in APK"
           else
             echo "⚠️  Could not find APK to verify"
+            exit 1
           fi
           
       - name: Verify and rename APK
