@@ -398,12 +398,18 @@ jobs:
           $ANDROID_SDK_ROOT/build-tools/34.0.0/zipalign -f -p 4 "$APK_UNSIGNED" "$APK_ALIGNED"
           
           # Sign the aligned APK (output to final path)
+          # Read passwords from keystore.properties (same as Gradle uses)
           echo "Signing modified APK..."
+          PROPS_FILE="$WORKSPACE_DIR/src-tauri/gen/android/keystore.properties"
+          STORE_PASS=$(grep "storePassword=" "$PROPS_FILE" | cut -d'=' -f2)
+          KEY_PASS=$(grep "keyPassword=" "$PROPS_FILE" | cut -d'=' -f2)
+          KEY_ALIAS=$(grep "keyAlias=" "$PROPS_FILE" | cut -d'=' -f2)
+          
           $ANDROID_SDK_ROOT/build-tools/34.0.0/apksigner sign \
             --ks "$KEYSTORE_PATH" \
-            --ks-key-alias homemap \
-            --ks-pass pass:"$ANDROID_KEYSTORE_PASSWORD" \
-            --key-pass pass:"$ANDROID_KEY_PASSWORD" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "pass:$STORE_PASS" \
+            --key-pass "pass:$KEY_PASS" \
             --in "$APK_ALIGNED" \
             --out "$APK_PATH"
           
