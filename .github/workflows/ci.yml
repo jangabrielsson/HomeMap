@@ -138,6 +138,13 @@ jobs:
           if [ ! -f ~/.cargo/bin/tauri ]; then
             cargo install tauri-cli --version "^2.0.0"
           fi
+      
+      - name: Initialize Android project
+        run: cargo tauri android init
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/29.0.14206865
+          NDK_HOME: /usr/local/lib/android/sdk/ndk/29.0.14206865
           
       - name: Check Android compilation (ARM64 only for CI speed)
         run: cargo tauri android build --target aarch64 --verbose
