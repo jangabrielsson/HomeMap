@@ -351,7 +351,10 @@ class HomeMap {
             document.getElementById('hc3User').value = settings.hc3_user || '';
             document.getElementById('hc3Password').value = settings.hc3_password || '';
             document.getElementById('hc3Protocol').value = settings.hc3_protocol || 'http';
-            document.getElementById('homemapPath').value = settings.homemap_path || '';
+            
+            // Show the actual path being used (from this.dataPath which was loaded at startup)
+            // This is more accurate than settings.homemap_path which might be empty for default location
+            document.getElementById('homemapPath').value = this.dataPath || settings.homemap_path || '';
             
             // Populate house name and icon from config (with fallback if config not loaded)
             document.getElementById('houseName').value = this.homemapConfig?.name || '';
@@ -529,14 +532,20 @@ class HomeMap {
             const houseName = document.getElementById('houseName').value.trim();
             const houseIcon = document.getElementById('houseIcon').value.trim();
             
-            if (this.homemapConfig && (houseName !== this.homemapConfig.name || houseIcon !== this.homemapConfig.icon)) {
-                this.homemapConfig.name = houseName || 'My Home Map';
-                this.homemapConfig.icon = houseIcon || '🏠';
+            // Reload config from disk to ensure we have the latest complete version before any saves
+            let currentConfig = await this.invoke('get_homemap_config');
+            
+            if (currentConfig && (houseName !== currentConfig.name || houseIcon !== currentConfig.icon)) {
+                currentConfig.name = houseName || 'My Home Map';
+                currentConfig.icon = houseIcon || '🏠';
                 
                 // Save updated config
                 const filePath = `${this.dataPath}/config.json`;
-                const content = JSON.stringify(this.homemapConfig, null, 4);
+                const content = JSON.stringify(currentConfig, null, 4);
                 await this.invoke('save_config', { filePath, content });
+                
+                // Update local copy
+                this.homemapConfig = currentConfig;
                 
                 // Update window title
                 this.updateWindowTitle();
@@ -547,8 +556,8 @@ class HomeMap {
             const backgroundColor = document.getElementById('widgetBackgroundColor').value;
             const backgroundOpacity = parseInt(document.getElementById('widgetBackgroundOpacity').value);
             
-            if (this.homemapConfig) {
-                this.homemapConfig.widgetBackground = {
+            if (currentConfig) {
+                currentConfig.widgetBackground = {
                     enabled: enableBackground,
                     color: backgroundColor,
                     opacity: backgroundOpacity
@@ -556,8 +565,11 @@ class HomeMap {
                 
                 // Save updated config
                 const filePath = `${this.dataPath}/config.json`;
-                const content = JSON.stringify(this.homemapConfig, null, 4);
+                const content = JSON.stringify(currentConfig, null, 4);
                 await this.invoke('save_config', { filePath, content });
+                
+                // Update local copy
+                this.homemapConfig = currentConfig;
             }
             
             // Apply widget background settings immediately
@@ -569,17 +581,24 @@ class HomeMap {
                 const wsPort = parseInt(document.getElementById('wsPort').value) || 8765;
                 const wsBindAddress = document.getElementById('wsBindAddress').value || '0.0.0.0';
                 
-                this.homemapConfig.websocket = {
+                // Reload config from disk to ensure we have the latest complete version
+                const currentConfig = await this.invoke('get_homemap_config');
+                
+                // Update only the websocket settings
+                currentConfig.websocket = {
                     enabled: wsEnabled,
                     port: wsPort,
                     bindAddress: wsBindAddress,
                     autoStart: wsEnabled  // Auto-start if enabled
                 };
                 
-                // Save homemapConfig with WebSocket settings
+                // Save the complete config back
                 const filePath = `${this.dataPath}/config.json`;
-                const content = JSON.stringify(this.homemapConfig, null, 4);
+                const content = JSON.stringify(currentConfig, null, 4);
                 await this.invoke('save_config', { filePath, content });
+                
+                // Update our local copy
+                this.homemapConfig = currentConfig;
             }
             
             // Reload config so the app uses the new credentials
@@ -591,6 +610,33 @@ class HomeMap {
             
             // Test connection with new credentials
             await this.hc3ApiManager.testConnection();
+            
+            // Check if homemap path was changed
+            const newHomemapPath = document.getElementById('homemapPath').value.trim();
+            const currentSettings = await this.invoke('get_app_settings');
+            const pathChanged = newHomemapPath && newHomemapPath !== currentSettings.homemap_path;
+            
+            if (pathChanged) {
+                // Save the new homemap path
+                currentSettings.homemap_path = newHomemapPath;
+                await this.invoke('save_app_settings', { settings: currentSettings });
+                
+                this.closeSettings();
+                
+                // Show message and reload the app to apply new path
+                try {
+                    await window.__TAURI__.dialog.message(
+                        '✅ Settings saved!\n\nHomeMap data path has been changed. The app will now reload to use the new location.',
+                        { title: 'Settings Saved', type: 'info' }
+                    );
+                } catch (err) {
+                    alert('✅ Settings saved!\n\nHomeMap data path has been changed. The app will now reload to use the new location.');
+                }
+                
+                // Reload the app to switch to new homemap folder
+                window.location.reload();
+                return;
+            }
             
             this.closeSettings();
             
@@ -1106,7 +1152,9 @@ class HomeMap {
             window.location.replace(window.location.href);
             
         } catch (error) {
-            console.error('Failed to restore backup:', error);
+            console.error('❌ Failed to restore backup:', error);
+            console.error('Error type:', typeof error);
+            console.error('Error string:', String(error));
             
             // Ensure dialog is closed and ALL state is reset on error
             if (!dialogClosed) {
@@ -1552,6 +1600,11 @@ You can also configure floor plans and manage devices once connected!`;
             
             this.homemapConfig = await this.invoke('get_homemap_config');
             console.log('HomeMap config:', this.homemapConfig);
+            console.log('Number of devices in config:', this.homemapConfig.devices?.length || 0);
+            console.log('Number of floors in config:', this.homemapConfig.floors?.length || 0);
+            if (this.homemapConfig.devices && this.homemapConfig.devices.length > 0) {
+                console.log('First device:', this.homemapConfig.devices[0]);
+            }
             
             // Ensure at least one floor exists - create default if none
             if (!this.homemapConfig.floors || this.homemapConfig.floors.length === 0) {

@@ -1,21 +1,33 @@
 #!/bin/bash
-# Build HomeMap for iOS simulator
+# Build HomeMap for iOS (simulator or device)
 
 set -e  # Exit on error
 
 cd "$(dirname "$0")/.."
 
-echo "Building HomeMap for iOS simulator..."
-cargo tauri ios build --target aarch64-sim 2>&1 | grep -E "(Compiling homemap|Finished|BUILD SUCCEEDED|BUILD FAILED|error)" | tail -20
+echo "🔨 Building HomeMap for iOS..."
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Build completed successfully!"
-    echo ""
-    echo "App location:"
-    echo "$HOME/Library/Developer/Xcode/DerivedData/homemap-*/Build/Products/release-iphonesimulator/HomeMap.app"
+# Check if building for device or simulator (default to simulator)
+TARGET="${1:-simulator}"
+
+if [ "$TARGET" = "device" ]; then
+    echo "Building for physical iOS device..."
+    cargo tauri ios build --target aarch64
 else
-    echo ""
-    echo "❌ Build failed!"
-    exit 1
+    echo "Building for iOS simulator..."
+    # Use Tauri's simplified target names
+    if [ "$(uname -m)" = "arm64" ]; then
+        echo "Apple Silicon Mac detected - building for aarch64-sim..."
+        cargo tauri ios build --target aarch64-sim
+    else
+        echo "Intel Mac detected - building for x86_64..."
+        cargo tauri ios build --target x86_64
+    fi
 fi
+
+echo ""
+echo "✅ Build completed successfully!"
+echo ""
+echo "To run the app:"
+echo "  On simulator: ./scripts/ios-run.sh"
+echo "  On device:    ./scripts/ios-device.sh"

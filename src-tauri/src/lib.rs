@@ -539,7 +539,7 @@ fn sync_builtin_resources_from_template(template_dir: &PathBuf, data_dir: &PathB
 
 // Extract bundled resources on Android/iOS from APK assets  
 #[cfg(any(target_os = "android", target_os = "ios"))]
-fn extract_bundled_template(_app: &tauri::AppHandle, _dest_dir: &PathBuf) -> Result<(), String> {
+fn extract_bundled_template(_app: &tauri::AppHandle, dest_dir: &PathBuf) -> Result<(), String> {
     println!("Attempting to extract bundled template resources...");
     
     let resolver = _app.path();
@@ -555,6 +555,7 @@ fn extract_bundled_template(_app: &tauri::AppHandle, _dest_dir: &PathBuf) -> Res
             // JavaScript will handle copying via fetch + write_file_base64
             
             println!("Android: Assets will be copied by JavaScript using asset:// protocol");
+            let _ = dest_dir; // Suppress unused warning
             return Err("Android asset extraction handled by JavaScript".to_string());
         }
         
@@ -1880,9 +1881,11 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
         .map_err(|e| format!("Failed to read backup archive: {}", e))?;
     
     // Validate backup file structure and contents
+    // Detect if files are nested in a top-level folder (e.g., "homemapdata/config.json")
     let mut has_config = false;
     let mut file_count = 0;
     let mut config_size = 0;
+    let mut folder_prefix: Option<String> = None;
     
     for i in 0..archive.len() {
         let file = archive.by_index(i)
@@ -1891,9 +1894,11 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
         file_count += 1;
         let file_name = file.name();
         
+        // Check for config.json at root or nested one level deep
         if file_name == "config.json" {
             has_config = true;
             config_size = file.size();
+            folder_prefix = None; // config.json is at root
             
             // Basic config.json validation - should be valid JSON and reasonable size
             if config_size < 10 {
@@ -1901,6 +1906,23 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
             }
             if config_size > 10_000_000 { // 10MB limit
                 return Err("Invalid backup file: config.json is too large".to_string());
+            }
+        } else if file_name.contains("/config.json") && !has_config {
+            // Check if it's nested one level deep (e.g., "homemapdata/config.json")
+            let parts: Vec<&str> = file_name.split('/').collect();
+            if parts.len() == 2 && parts[1] == "config.json" {
+                has_config = true;
+                config_size = file.size();
+                folder_prefix = Some(format!("{}/", parts[0]));
+                println!("Detected nested structure with folder prefix: {}", parts[0]);
+                
+                // Basic config.json validation
+                if config_size < 10 {
+                    return Err("Invalid backup file: config.json is too small".to_string());
+                }
+                if config_size > 10_000_000 { // 10MB limit
+                    return Err("Invalid backup file: config.json is too large".to_string());
+                }
             }
         }
         
@@ -1925,11 +1947,17 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
         .map_err(|e| format!("Failed to reopen backup file: {}", e))?)
         .map_err(|e| format!("Failed to read backup archive for validation: {}", e))?;
     
+    let config_file_name = if let Some(ref prefix) = folder_prefix {
+        format!("{}config.json", prefix)
+    } else {
+        "config.json".to_string()
+    };
+    
     for i in 0..archive_for_validation.len() {
         let mut file = archive_for_validation.by_index(i)
             .map_err(|e| format!("Failed to read archive entry: {}", e))?;
         
-        if file.name() == "config.json" {
+        if file.name() == config_file_name {
             let mut config_content = String::new();
             file.read_to_string(&mut config_content)
                 .map_err(|e| format!("Failed to read config.json: {}", e))?;
@@ -2021,8 +2049,23 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
         let mut file = archive.by_index(i)
             .map_err(|e| format!("Failed to read archive entry: {}", e))?;
         
-        let file_path = file.name().to_string();
+        let mut file_path = file.name().to_string();
         let is_dir = file.is_dir();
+        
+        // Strip folder prefix if present (e.g., "homemapdata/config.json" -> "config.json")
+        if let Some(ref prefix) = folder_prefix {
+            if file_path.starts_with(prefix) {
+                file_path = file_path[prefix.len()..].to_string();
+            } else {
+                // Skip files that don't match the detected prefix (e.g., __MACOSX)
+                continue;
+            }
+        }
+        
+        // Skip empty paths after stripping prefix
+        if file_path.is_empty() {
+            continue;
+        }
         
         // Check if we should restore this file type
         let should_restore = match file_path.as_str() {
@@ -2057,13 +2100,91 @@ fn restore_homemap_data(backup_path: String, target_path: String, options: Resto
                     .map_err(|e| format!("Failed to create parent directory: {}", e))?;
             }
             
-            let mut outfile = File::create(&outpath)
-                .map_err(|e| format!("Failed to create file {}: {}", file_path, e))?;
-            
-            std::io::copy(&mut file, &mut outfile)
-                .map_err(|e| format!("Failed to extract file {}: {}", file_path, e))?;
-            
-            println!("Restored file: {}", file_path);
+            // Special handling for config.json - merge with existing config to preserve critical fields
+            if file_path == "config.json" && options.restore_config {
+                // Read restored config from zip
+                let mut restored_config_content = String::new();
+                file.read_to_string(&mut restored_config_content)
+                    .map_err(|e| format!("Failed to read config.json from archive: {}", e))?;
+                
+                // Try to read existing config to preserve critical fields
+                let merged_config = if outpath.exists() {
+                    match fs::read_to_string(&outpath) {
+                        Ok(existing_content) => {
+                            match (
+                                serde_json::from_str::<serde_json::Value>(&existing_content),
+                                serde_json::from_str::<serde_json::Value>(&restored_config_content)
+                            ) {
+                                (Ok(existing_json), Ok(mut restored_json)) => {
+                                    // Preserve critical fields from existing config
+                                    if let (Some(existing_obj), Some(restored_obj)) = 
+                                        (existing_json.as_object(), restored_json.as_object_mut()) {
+                                        
+                                        println!("Merging configs - Restored has {} devices", 
+                                            restored_obj.get("devices")
+                                                .and_then(|d| d.as_array())
+                                                .map(|a| a.len())
+                                                .unwrap_or(0));
+                                        
+                                        // Preserve dataPath (required for file access) - or set to target_path
+                                        if let Some(data_path) = existing_obj.get("dataPath") {
+                                            restored_obj.insert("dataPath".to_string(), data_path.clone());
+                                            println!("Preserved dataPath from existing config: {:?}", data_path);
+                                        } else {
+                                            // Set dataPath to target_path if not present
+                                            restored_obj.insert("dataPath".to_string(), 
+                                                serde_json::Value::String(target_path.clone()));
+                                            println!("Set dataPath to target_path: {}", target_path);
+                                        }
+                                        
+                                        // Preserve HC3 credentials (optional but important)
+                                        if let Some(hc3_ip) = existing_obj.get("hc3_ip") {
+                                            restored_obj.insert("hc3_ip".to_string(), hc3_ip.clone());
+                                            println!("Preserved hc3_ip from existing config");
+                                        }
+                                        if let Some(username) = existing_obj.get("username") {
+                                            restored_obj.insert("username".to_string(), username.clone());
+                                            println!("Preserved username from existing config");
+                                        }
+                                        if let Some(password) = existing_obj.get("password") {
+                                            restored_obj.insert("password".to_string(), password.clone());
+                                            println!("Preserved password from existing config");
+                                        }
+                                    }
+                                    
+                                    serde_json::to_string_pretty(&restored_json)
+                                        .unwrap_or(restored_config_content)
+                                }
+                                _ => {
+                                    println!("Warning: Could not parse config for merging, using restored config as-is");
+                                    restored_config_content
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            println!("No existing config found, using restored config as-is");
+                            restored_config_content
+                        }
+                    }
+                } else {
+                    restored_config_content
+                };
+                
+                // Write merged config
+                fs::write(&outpath, merged_config)
+                    .map_err(|e| format!("Failed to write merged config.json: {}", e))?;
+                
+                println!("Restored and merged config.json");
+            } else {
+                // Normal file extraction
+                let mut outfile = File::create(&outpath)
+                    .map_err(|e| format!("Failed to create file {}: {}", file_path, e))?;
+                
+                std::io::copy(&mut file, &mut outfile)
+                    .map_err(|e| format!("Failed to extract file {}: {}", file_path, e))?;
+                
+                println!("Restored file: {}", file_path);
+            }
         }
     }
     
